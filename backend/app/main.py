@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.csrf import CSRFMiddleware
+from app.core.errors import register_exception_handlers
 from app.core.security_headers import SecurityHeadersMiddleware
 
 
@@ -21,6 +23,10 @@ def create_app() -> FastAPI:
         openapi_url=None if is_production else "/api/openapi.json",
     )
 
+    register_exception_handlers(app)
+
+    # Middleware added last runs first: CORS -> security headers -> CSRF -> routes.
+    app.add_middleware(CSRFMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -28,6 +34,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-CSRF-Token"],
+        expose_headers=["X-CSRF-Token", "Retry-After"],
     )
 
     app.include_router(api_router)

@@ -26,7 +26,8 @@ dist/
 .vite/
 coverage/
 
-# --- Uploads / local data ---
+# --- Uploads / local data (dev email outbox contains password-reset links) ---
+backend/var/
 uploads/
 storage/
 *.sqlite3

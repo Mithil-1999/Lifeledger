@@ -1,8 +1,15 @@
 import { Navigate, type RouteObject } from "react-router";
 import { AppLayout } from "@/components/layout/app-layout";
+import { AuthLayout } from "@/features/auth/auth-layout";
+import { PublicOnly, RequireAuth } from "@/features/auth/route-guards";
+import { ForgotPasswordPage } from "@/pages/auth/forgot-password-page";
+import { LoginPage } from "@/pages/auth/login-page";
+import { RegisterPage } from "@/pages/auth/register-page";
+import { ResetPasswordPage } from "@/pages/auth/reset-password-page";
 import { BillsPage } from "@/pages/bills-page";
 import { BudgetPage } from "@/pages/budget-page";
 import { CalendarPage } from "@/pages/calendar-page";
+import { ChangePasswordPage } from "@/pages/change-password-page";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { DebtsPage } from "@/pages/debts-page";
 import { DocumentsPage } from "@/pages/documents-page";
@@ -21,28 +28,54 @@ import { VaultPage } from "@/pages/vault-page";
 
 export const routes: RouteObject[] = [
   {
-    path: "/",
-    element: <AppLayout />,
     errorElement: <RouteErrorPage />,
     children: [
-      { index: true, element: <Navigate to="/dashboard" replace /> },
-      { path: "dashboard", element: <DashboardPage /> },
-      { path: "finance", element: <FinancePage /> },
-      { path: "income", element: <IncomePage /> },
-      { path: "expenses", element: <ExpensesPage /> },
-      { path: "budget", element: <BudgetPage /> },
-      { path: "bills", element: <BillsPage /> },
-      { path: "savings", element: <SavingsPage /> },
-      { path: "debts", element: <DebtsPage /> },
-      { path: "tasks", element: <TasksPage /> },
-      { path: "reminders", element: <RemindersPage /> },
-      { path: "calendar", element: <CalendarPage /> },
-      { path: "vault", element: <VaultPage /> },
-      { path: "notes", element: <NotesPage /> },
-      { path: "documents", element: <DocumentsPage /> },
-      { path: "reports", element: <ReportsPage /> },
-      { path: "settings", element: <SettingsPage /> },
-      { path: "*", element: <NotFoundPage /> },
+      // Public authentication pages.
+      {
+        element: <AuthLayout />,
+        children: [
+          {
+            element: <PublicOnly />,
+            children: [
+              { path: "login", element: <LoginPage /> },
+              { path: "register", element: <RegisterPage /> },
+              { path: "forgot-password", element: <ForgotPasswordPage /> },
+            ],
+          },
+          // Reachable signed in or out: the emailed link must always work.
+          { path: "reset-password", element: <ResetPasswordPage /> },
+        ],
+      },
+      // Everything else requires a signed-in user.
+      {
+        path: "/",
+        element: (
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        ),
+        children: [
+          { index: true, element: <Navigate to="/dashboard" replace /> },
+          { path: "dashboard", element: <DashboardPage /> },
+          { path: "finance", element: <FinancePage /> },
+          { path: "income", element: <IncomePage /> },
+          { path: "expenses", element: <ExpensesPage /> },
+          { path: "budget", element: <BudgetPage /> },
+          { path: "bills", element: <BillsPage /> },
+          { path: "savings", element: <SavingsPage /> },
+          { path: "debts", element: <DebtsPage /> },
+          { path: "tasks", element: <TasksPage /> },
+          { path: "reminders", element: <RemindersPage /> },
+          { path: "calendar", element: <CalendarPage /> },
+          { path: "vault", element: <VaultPage /> },
+          { path: "notes", element: <NotesPage /> },
+          { path: "documents", element: <DocumentsPage /> },
+          { path: "reports", element: <ReportsPage /> },
+          { path: "settings", element: <SettingsPage /> },
+          { path: "settings/password", element: <ChangePasswordPage /> },
+          { path: "*", element: <NotFoundPage /> },
+        ],
+      },
     ],
   },
 ];

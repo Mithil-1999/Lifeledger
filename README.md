@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phase 1 (Project Foundation).** You get the full-stack skeleton, the responsive app shell and navigation, the database wiring, and a health check. Each business module is currently a placeholder page, and its features are built in the later phases listed below.
+> **Status: Phase 2 (Authentication).** You get the full-stack foundation plus secure accounts: registration, login/logout, protected pages and APIs, change password, and password reset. Each business module is still a placeholder page, and its features are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -12,12 +12,12 @@ Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for m
 
 | Layer    | Technology                                                                                          |
 | -------- | --------------------------------------------------------------------------------------------------- |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui-style components (Radix UI), React Router, TanStack Query, Lucide icons |
-| Backend  | Python, FastAPI, Pydantic v2 / pydantic-settings, SQLAlchemy 2.0, Alembic                            |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui-style components (Radix UI), React Router, TanStack Query, React Hook Form + Zod, Sonner toasts, Lucide icons |
+| Backend  | Python, FastAPI, Pydantic v2 / pydantic-settings, SQLAlchemy 2.0, Alembic, Argon2 (argon2-cffi)      |
 | Database | PostgreSQL 17 (psycopg 3 driver)                                                                    |
 | Tooling  | Docker, Docker Compose, Vitest + Testing Library, pytest, ESLint                                    |
 
-React Hook Form, Zod and Recharts are part of the planned stack. They're added in the phases that first need forms and charts.
+Recharts is part of the planned stack. It's added in the phase that first needs charts.
 
 ## Project structure
 
@@ -26,13 +26,17 @@ React Hook Form, Zod and Recharts are part of the planned stack. They're added i
 ├── backend/                     FastAPI application
 │   ├── app/
 │   │   ├── api/                 Routers (all under /api)
-│   │   │   ├── router.py
-│   │   │   └── routes/health.py GET /api/health
-│   │   ├── core/                Settings (env), security headers middleware
-│   │   ├── db/                  Declarative Base, engine/session
-│   │   ├── models/              ORM models (none yet; later phases)
+│   │   │   ├── router.py        Public routers + `protected_router` (auth required)
+│   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
+│   │   │   └── routes/          health.py, auth.py
+│   │   ├── core/                Settings, security (Argon2, tokens, password policy),
+│   │   │                        CSRF, rate limiting, security headers, error handlers
+│   │   ├── db/                  Declarative Base + mixins, engine/session
+│   │   ├── models/              User, UserSession, PasswordResetToken
+│   │   ├── schemas/             Pydantic request/response models
+│   │   ├── services/            Auth business logic, email delivery
 │   │   └── main.py              App factory: CORS, middleware, routers
-│   ├── alembic/                 Migrations (baseline revision 0001)
+│   ├── alembic/                 Migrations (0001 baseline, 0002 users/sessions/reset tokens)
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
 │   ├── Dockerfile
@@ -42,14 +46,16 @@ React Hook Form, Zod and Recharts are part of the planned stack. They're added i
 │   ├── src/
 │   │   ├── app/                 Providers and route table
 │   │   ├── components/
-│   │   │   ├── ui/              Reusable primitives (button, card, badge, sheet, dropdown, tooltip…)
+│   │   │   ├── ui/              Reusable primitives (button, card, input, label, alert, sheet, dropdown…)
+│   │   │   ├── forms/           Form field + password input (show/hide)
 │   │   │   ├── layout/          Sidebar, top bar, mobile drawer, bottom nav, user menu
 │   │   │   ├── common/          Page header, empty state, module placeholder
 │   │   │   └── theme/           Light / dark / system theme
 │   │   ├── config/navigation.ts Single source of truth for nav items
+│   │   ├── features/auth/       Auth API, hooks, Zod schemas, route guards, auth layout
 │   │   ├── features/system/     API health hook, status card, status indicator
-│   │   ├── lib/                 API client, query client, utils
-│   │   ├── pages/               One page per module
+│   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
+│   │   ├── pages/               One page per module; pages/auth/ for sign-in flows
 │   │   └── test/                Vitest tests
 │   └── vite.config.ts
 ├── docker-compose.yml           PostgreSQL + backend + frontend (development)
@@ -76,6 +82,12 @@ Then edit `.env`:
 | `FRONTEND_URL`          | Allowed CORS origin (the SPA).                                           |
 | `BACKEND_URL`           | Public URL of the API.                                                   |
 | `VITE_API_PROXY_TARGET` | Where the Vite dev server proxies `/api` requests.                       |
+| `REGISTRATION_ENABLED`  | Allow new sign-ups. **Set to `false` once your account exists.**        |
+| `COOKIE_SECURE`         | Send cookies only over HTTPS. Must be `true` in production.              |
+| `SESSION_IDLE_TIMEOUT_MINUTES` / `SESSION_LIFETIME_HOURS` / `SESSION_REMEMBER_ME_DAYS` | Session expiry. |
+| `PASSWORD_RESET_TOKEN_MINUTES` | How long a reset link stays valid (default 30).                    |
+| `EMAIL_BACKEND`, `SMTP_*`, `EMAIL_FROM` | Email delivery for password resets (see below).           |
+| `RATE_LIMIT_ENABLED` / `TRUST_PROXY_HEADERS` | Rate limiting; only trust `X-Forwarded-For` behind your own proxy. |
 
 `.env` is git-ignored. **Never commit real secrets.**
 
@@ -156,7 +168,10 @@ Then open http://localhost:5173. The Vite dev server proxies `/api/*` to the bac
 ## Testing
 
 ```bash
-# Backend: unit tests always run; database tests run when DATABASE_URL is reachable
+# Backend. Database tests use a separate "<db>_test" database (or TEST_DATABASE_URL).
+# It is dropped and re-created on every run, migrated from empty to head, and downgraded
+# to base at the end, so every run also proves the migrations work on a clean database.
+# The database role needs CREATEDB (the Docker Compose superuser has it).
 cd backend
 pytest
 
@@ -176,28 +191,72 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 
 ## API
 
-| Method | Path          | Description                                   |
-| ------ | ------------- | --------------------------------------------- |
-| GET    | `/api/health` | API liveness + database connectivity check    |
+| Method | Path                        | Auth | Description |
+| ------ | --------------------------- | ---- | ----------- |
+| GET    | `/api/health`               | –    | API liveness + database connectivity check |
+| GET    | `/api/auth/csrf`            | –    | Issue/return the CSRF token (cookie + body) |
+| GET    | `/api/auth/config`          | –    | `{registration_enabled, password_min_length}` |
+| POST   | `/api/auth/register`        | –    | Create account and sign in (201; 409 duplicate email/username) |
+| POST   | `/api/auth/login`           | –    | `{identifier, password, remember_me}`, where identifier is an email or username |
+| POST   | `/api/auth/logout`          | –    | Revoke the current session and clear the cookie (204) |
+| POST   | `/api/auth/forgot-password` | –    | Always 202 with the same message (no account enumeration) |
+| POST   | `/api/auth/reset-password`  | –    | `{token, new_password, confirm_new_password}` (204) |
+| GET    | `/api/auth/me`              | ✔    | Current user |
+| POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
-## Security baseline (Phase 1)
+Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
+
+## Authentication design
+
+- **Passwords** are hashed with **Argon2id** (argon2-cffi defaults, RFC 9106) and transparently re-hashed on login if the parameters change. Plaintext passwords are never stored or logged. Request models use `SecretStr` so they're masked in reprs and tracebacks.
+- **Password policy:** 12–128 characters, at least three of lowercase, uppercase, numbers and symbols, not a common password, and not containing your name, username or email. It's enforced on the server and mirrored in the UI.
+- **Sessions are server-side.** Login creates a random 256-bit token sent in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` when `COOKIE_SECURE=true`). The database stores only an HMAC-SHA256 of the token, keyed with `APP_SECRET_KEY`. That makes logout, "sign out other devices" and password resets real revocations.
+- **Expiry:** sessions end after `SESSION_IDLE_TIMEOUT_MINUTES` of inactivity (default 8 h) or `SESSION_LIFETIME_HOURS` in total (default 12 h). With "Keep me signed in", the session and cookie last `SESSION_REMEMBER_ME_DAYS` (default 30).
+- **CSRF:** double-submit token. `GET /api/auth/csrf` sets a readable `lv_csrf` cookie, and every state-changing `/api` request must echo it in `X-CSRF-Token`. The token rotates on login and logout (the new value is returned in the `X-CSRF-Token` response header).
+- **Authorization:** protected endpoints depend on `CurrentUser`. Routers from later phases attach to `protected_router` in `app/api/router.py`, which requires an active, signed-in user for every route. Disabled accounts lose access immediately.
+- **Rate limiting** (in-memory, per process):
+
+  | Endpoint | Limits |
+  | --- | --- |
+  | login | 5/min per IP+account, 20/15 min per IP |
+  | register | 5/h per IP |
+  | forgot password | 5/h per IP, 3/h per email |
+  | reset password | 10/h per IP |
+  | change password | 5/15 min per user |
+
+  Exceeding a limit returns `429` with `Retry-After`. If you ever run multiple workers or replicas, move the limiter to Redis.
+- **No account enumeration:** failed logins always say *"Invalid email/username or password."* (unknown user, wrong password or disabled account), and unknown users still pay the full hashing cost. Forgot-password always returns the same response, and emails go out in the background.
+- **Registration** is meant for creating your own account. Set `REGISTRATION_ENABLED=false` afterwards.
+
+### Password reset
+
+1. `POST /api/auth/forgot-password` creates a random single-use token that expires after 30 minutes. Only its HMAC is stored, and requesting a new link invalidates older ones.
+2. The email link is `FRONTEND_URL/reset-password#token=…`. The token sits in the URL **fragment**, which browsers never send to servers, so it can't leak into access logs or `Referer` headers. The page strips it from the address bar straight away.
+3. A successful reset changes the password and **signs out every session**.
+
+**Development (`EMAIL_BACKEND=dev_outbox`):** emails are written as `.eml` files to `backend/var/dev-outbox/`, which is git-ignored. Open the newest file and copy the link. Settings validation refuses this backend in production.
+
+**Production (`EMAIL_BACKEND=smtp`):** set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `EMAIL_FROM`. Any SMTP relay or transactional email provider works (SES, Postmark, Mailgun, Gmail with an app password…). The integration point is `send_email()` in `backend/app/services/email.py`. To use a provider's HTTP API instead, add a backend there.
+
+## Security baseline
 
 - All configuration and secrets come from environment variables. `.env` and key/cert files are git-ignored.
-- The app refuses to start in production with a weak or placeholder `APP_SECRET_KEY` or with `DEBUG=true`.
+- The app refuses to start in production with a weak or placeholder `APP_SECRET_KEY`, with `DEBUG=true`, with `COOKIE_SECURE=false`, or with the dev email outbox.
 - CORS is restricted to `FRONTEND_URL` (plus optional `CORS_EXTRA_ORIGINS`).
 - Every API response sets security headers: `nosniff`, `X-Frame-Options: DENY`, a strict CSP, Referrer-Policy and Permissions-Policy.
 - Interactive API docs are disabled in production.
 - Docker publishes ports on `127.0.0.1` only, and the backend container runs as a non-root user.
 - All database access goes through SQLAlchemy with bound parameters. There's no string-built SQL.
 
-Authentication, rate limiting, CSRF protection, vault encryption and upload hardening come in their own phases. This is a personal project, and no application is perfectly secure.
+- Unhandled errors return a generic `500` to the client. Details stay in the server log, and request bodies are never logged.
+- Authentication, CSRF protection and rate limiting are covered above. Vault encryption and upload hardening come in their own phases. This is a personal project, and no application is perfectly secure.
 
 ## Roadmap
 
 | Phase | Scope                                      |
 | ----- | ------------------------------------------ |
 | 1     | Project foundation ✅                      |
-| 2     | Authentication                             |
+| 2     | Authentication ✅                          |
 | 3     | Dashboard                                  |
 | 4     | Income and expenses                        |
 | 5     | Budget, bills, rent and savings            |

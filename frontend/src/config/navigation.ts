@@ -197,5 +197,14 @@ export function findNavItem(path: string): NavItem | undefined {
   return ALL_NAV_ITEMS.find((item) => item.path === path);
 }
 
+/** Titles for app pages that aren't top-level navigation items. */
+const EXTRA_PAGE_TITLES: Record<string, string> = {
+  "/settings/password": "Change password",
+};
+
+export function pageTitle(path: string): string {
+  return findNavItem(path)?.title ?? EXTRA_PAGE_TITLES[path] ?? "LifeVault";
+}
+
 /** Primary destinations shown in the mobile bottom bar. */
 export const MOBILE_PRIMARY_PATHS = ["/dashboard", "/expenses", "/tasks", "/calendar"];

@@ -43,6 +43,39 @@ class Settings(BaseSettings):
 
     default_currency: str = "NPR"
 
+    # --- Authentication -------------------------------------------------------------
+    # LifeVault is a private app: disable registration once your account exists.
+    registration_enabled: bool = True
+    session_cookie_name: str = "lv_session"
+    csrf_cookie_name: str = "lv_csrf"
+    # Must be true whenever the app is served over HTTPS (enforced in production).
+    cookie_secure: bool = False
+    # Sessions end after this much inactivity (non-"remember me" sessions)...
+    session_idle_timeout_minutes: int = Field(default=480, ge=5)
+    # ...and unconditionally after this long.
+    session_lifetime_hours: int = Field(default=12, ge=1)
+    session_remember_me_days: int = Field(default=30, ge=1, le=90)
+    password_reset_token_minutes: int = Field(default=30, ge=5, le=240)
+
+    # --- Rate limiting ----------------------------------------------------------------
+    rate_limit_enabled: bool = True
+    # Only enable behind a trusted reverse proxy that sets X-Forwarded-For.
+    trust_proxy_headers: bool = False
+
+    # --- Email ------------------------------------------------------------------------
+    # dev_outbox: writes emails to DEV_OUTBOX_DIR (development only, never production)
+    # smtp:       sends through the SMTP server below
+    # memory:     keeps emails in memory (automated tests)
+    # disabled:   drops emails (password reset links cannot be delivered)
+    email_backend: Literal["dev_outbox", "smtp", "memory", "disabled"] = "dev_outbox"
+    dev_outbox_dir: Path = BACKEND_DIR / "var" / "dev-outbox"
+    email_from: str = "LifeVault <no-reply@lifevault.local>"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_starttls: bool = True
+
     @field_validator("database_url")
     @classmethod
     def _normalize_driver(cls, value: str) -> str:
@@ -61,6 +94,12 @@ class Settings(BaseSettings):
                 )
             if self.debug:
                 raise ValueError("DEBUG must be false in production.")
+            if not self.cookie_secure:
+                raise ValueError("COOKIE_SECURE must be true in production (serve LifeVault over HTTPS).")
+            if self.email_backend in ("dev_outbox", "memory"):
+                raise ValueError("EMAIL_BACKEND must be 'smtp' or 'disabled' in production.")
+        if self.email_backend == "smtp" and not (self.smtp_host and self.email_from):
+            raise ValueError("EMAIL_BACKEND=smtp requires SMTP_HOST and EMAIL_FROM.")
         return self
 
     @property

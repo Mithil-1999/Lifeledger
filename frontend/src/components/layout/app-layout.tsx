@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Outlet, useLocation } from "react-router";
-import { findNavItem } from "@/config/navigation";
+import { pageTitle } from "@/config/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "./bottom-nav";
@@ -22,7 +22,7 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = React.useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const { pathname } = useLocation();
-  const title = findNavItem(pathname)?.title ?? "LifeVault";
+  const title = pageTitle(pathname);
 
   const toggleCollapsed = () =>
     setCollapsed((value) => {
