@@ -15,6 +15,14 @@ def _money_str(value: Decimal) -> str:
 DecimalStr = Annotated[Decimal, PlainSerializer(_money_str, return_type=str)]
 
 
+def _percent_str(value: Decimal) -> str:
+    return format(value.quantize(Decimal("0.1")), "f")
+
+
+# Percentages with one decimal place ("87.5").
+PercentStr = Annotated[Decimal, PlainSerializer(_percent_str, return_type=str)]
+
+
 class Money(BaseModel):
     amount: DecimalStr
     currency: str

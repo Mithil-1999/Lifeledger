@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phase 4 (Income & Expenses).** You get secure accounts, a personal dashboard, and full income and expense management: categories (including your own), search, filters, and monthly and yearly totals. The dashboard's income, expenses, balance and charts come from your real records. Savings, budgets, bills, tasks and reminders are built in the later phases listed below. Until then, their dashboard sections show empty states, never made-up numbers.
+> **Status: Phase 5 (Budget, Bills & Savings).** You get secure accounts, a personal dashboard, income and expense management, monthly category budgets with warning thresholds, recurring bills (pending, paid and overdue), and savings goals with progress tracking. Everything on the dashboard except tasks and reminders comes from your real records. Tasks, reminders and the remaining modules are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -28,15 +28,19 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── api/                 Routers (all under /api)
 │   │   │   ├── router.py        Public routers + `protected_router` (auth required)
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
-│   │   │   └── routes/          health.py, auth.py
+│   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
+│   │   │                        planning (budgets/bills/savings)
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
-│   │   ├── models/              User, UserSession, PasswordResetToken
+│   │   ├── models/              user.py, finance.py (categories, incomes, expenses),
+│   │   │                        planning.py (budgets, bills, bill payments, savings goals)
 │   │   ├── schemas/             Pydantic request/response models
-│   │   ├── services/            Auth business logic, email delivery
+│   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
+│   │   │                        budgets, bills, savings
 │   │   └── main.py              App factory: CORS, middleware, routers
-│   ├── alembic/                 Migrations (0001 baseline, 0002 users/sessions/reset tokens)
+│   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
+│   │                            → 0004 budgets/bills/savings
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
 │   ├── Dockerfile
@@ -53,6 +57,10 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   └── theme/           Light / dark / system theme
 │   │   ├── config/navigation.ts Single source of truth for nav items
 │   │   ├── features/auth/       Auth API, hooks, Zod schemas, route guards, auth layout
+│   │   ├── features/dashboard/  Dashboard data hook, stat cards, panels, quick actions, charts
+│   │   ├── features/finance/    Income/expense API, forms, filters, table, category manager
+│   │   ├── features/planning/   Budgets, bills and savings API + constants
+│   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
 │   │   ├── pages/               One page per module; pages/auth/ for sign-in flows
@@ -212,6 +220,18 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 | POST   | `/api/incomes`, `/api/expenses` | ✔ | Create (201) |
 | GET / PUT / DELETE | `/api/incomes/{id}`, `/api/expenses/{id}` | ✔ | Read, replace, or delete one record (404 if it isn't yours) |
 | GET    | `/api/incomes/summary?year=`, `/api/expenses/summary?year=` | ✔ | Year total, the current month's total, 12 monthly totals, and totals by category |
+| GET    | `/api/budgets?month=YYYY-MM` | ✔ | The month's budgets with spent, remaining, percentage used and status, plus totals and spending outside any budget |
+| POST   | `/api/budgets`              | ✔ | `{category_id, month, amount, warning_threshold}` (409 if the category already has a budget that month) |
+| PUT / DELETE | `/api/budgets/{id}`   | ✔ | Change the amount or threshold, or delete |
+| POST   | `/api/budgets/copy`         | ✔ | `{from_month, to_month}`: copies budgets, skipping categories already set up |
+| GET    | `/api/bills?status=&category=` | ✔ | Bills (overdue first), with overdue and due-soon counts and totals, and the amount paid this month |
+| POST   | `/api/bills`                | ✔ | Create a bill |
+| GET / PUT / DELETE | `/api/bills/{id}` | ✔ | Read, replace, or delete one bill |
+| POST   | `/api/bills/{id}/pay`       | ✔ | `{paid_on, amount?, record_expense, payment_method}`. Logs the payment; recurring bills move to the next due date |
+| GET    | `/api/bills/{id}/payments`  | ✔ | Payment history |
+| GET / POST | `/api/savings-goals`    | ✔ | Goals with progress and totals, or create a goal |
+| GET / PUT / DELETE | `/api/savings-goals/{id}` | ✔ | Read, update, or delete a goal (changing the balance logs an adjustment) |
+| GET / POST | `/api/savings-goals/{id}/contributions` | ✔ | History, or `{kind: deposit or withdrawal, amount, date, note}` |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
@@ -233,6 +253,26 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - *Monthly income and expenses* cover the current month in `APP_TIMEZONE`.
   - *Current balance* is all income minus all expenses dated up to today; future-dated records don't count yet.
   - *Charts:* the last 6 months of income vs expenses, this month's expenses by category, and monthly spending.
+
+## Budgets, bills & savings
+
+- **Budgets** are per expense category, per month. *Spent* always comes from your real expenses in that month.
+  - Each budget reports *remaining* (negative when over), *percent used* (one decimal) and a status: **on track**, **near limit** once spending reaches the warning threshold (1–100%, default 80%), or **over budget**.
+  - The threshold check uses exact arithmetic, so 799.99 of 1000 isn't flagged at 80% just because it rounds to "80.0%".
+  - "Copy from last month" duplicates last month's budgets without overwriting ones you've already set.
+- **Bills**
+  - *Categories:* Room rent, Wi-Fi, Electricity, Water, Mobile, Subscription, Insurance, Loan, Other.
+  - *Frequencies:* one-time, weekly, monthly, quarterly, yearly.
+  - *Status:* **Pending** and **Paid** are stored, while **Overdue** is always worked out (pending and past its due date), so it can't go stale.
+  - *Paying a bill:* marking it paid logs a payment. A one-time bill becomes Paid; a recurring bill moves to its next due date. A bill due on the 31st returns to the 31st after shorter months.
+  - *Recording the expense:* you can also record the payment as an expense in the matching category (for example Wi-Fi → Internet/Wi-Fi, Loan → Loan Payment).
+  - *Deleting:* a bill deletes its payment history, but expenses already recorded from it are kept.
+- **Savings goals** track a target amount, current amount, optional target date and description.
+  - Deposits, withdrawals and balance edits are all logged, so the current amount always equals the logged history. That same history draws the dashboard's savings-over-time chart.
+  - You can't withdraw more than the balance.
+  - Progress shows the percentage saved and the amount left. With a target date, it also shows how much to save per month, rounded **up** to the cent so paying it actually reaches the goal.
+- **Dashboard:** *Budget remaining* covers this month's budgets, and *Savings* is the total across your goals. Both say "not set up yet" instead of showing 0 when you have no budgets or goals. The bills panel lists overdue bills and those due in the next 30 days, and the savings chart shows the last 6 months.
+- **Debts** isn't in any scheduled phase yet, so its page stays a placeholder. Loan repayments can be tracked as *Loan* bills in the meantime.
 
 ## Dashboard
 
@@ -298,7 +338,7 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
 | 2     | Authentication ✅                          |
 | 3     | Dashboard ✅                               |
 | 4     | Income and expenses ✅                     |
-| 5     | Budget, bills, rent and savings            |
+| 5     | Budget, bills, rent and savings ✅         |
 | 6     | Tasks and reminders                        |
 | 7     | Secure password vault                      |
 | 8     | Notes and documents                        |

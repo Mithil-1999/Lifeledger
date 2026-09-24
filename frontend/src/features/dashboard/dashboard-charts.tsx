@@ -15,7 +15,12 @@ export function DashboardCharts({ summary, loading }: { summary?: DashboardSumma
       ? `Charts fill in automatically once you record income and expenses (Phase ${charts.available_from_phase}).`
       : "Record income and expenses to see this chart.";
   const savingsPhase = charts?.pending?.savings;
-  const savingsDescription = savingsPhase ? `Savings tracking arrives in Phase ${savingsPhase}.` : emptyDescription;
+  const savingsDescription =
+    charts && !charts.available
+      ? emptyDescription
+      : savingsPhase
+        ? `Savings tracking arrives in Phase ${savingsPhase}.`
+        : "Create a savings goal and add money to see your savings grow.";
 
   const incomeVsExpenses = (charts?.income_vs_expenses ?? []).map((p) => ({
     month: p.month,

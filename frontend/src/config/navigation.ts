@@ -19,10 +19,10 @@ import {
 } from "lucide-react";
 
 /** Highest completed build phase; modules with phase <= this are live (not placeholders). */
-export const CURRENT_PHASE = 4;
+export const CURRENT_PHASE = 5;
 
-export function isLive(item: { phase: number }) {
-  return item.phase <= CURRENT_PHASE;
+export function isLive(item: { phase: number | null }) {
+  return item.phase !== null && item.phase <= CURRENT_PHASE;
 }
 
 export interface NavItem {
@@ -30,8 +30,8 @@ export interface NavItem {
   path: string;
   icon: LucideIcon;
   description: string;
-  /** Build phase in which the module's real functionality lands. */
-  phase: number;
+  /** Build phase in which the module's real functionality lands (null = not yet scheduled). */
+  phase: number | null;
   /** Short list of what the module will do, shown on its placeholder page. */
   planned: string[];
 }
@@ -111,7 +111,8 @@ export const NAV_GROUPS: NavGroup[] = [
         path: "/debts",
         icon: HandCoins,
         description: "Loans you owe and money owed to you.",
-        phase: 5,
+        // Not part of any scheduled phase yet; loan repayments can be tracked as "Loan" bills.
+        phase: null,
         planned: ["Loan tracking", "Repayment history", "Outstanding balances"],
       },
     ],

@@ -19,7 +19,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: "Add expense", icon: CirclePlus, modulePath: "/expenses", implemented: true },
   { label: "Add task", icon: ListPlus, modulePath: "/tasks", implemented: false },
   { label: "Add reminder", icon: BellPlus, modulePath: "/reminders", implemented: false },
-  { label: "Add bill", icon: ReceiptText, modulePath: "/bills", implemented: false },
+  { label: "Add bill", icon: ReceiptText, modulePath: "/bills", implemented: true },
 ];
 
 function ComingSoonDialog({ action, onOpenChange }: { action: QuickAction | null; onOpenChange: (open: boolean) => void }) {

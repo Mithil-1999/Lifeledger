@@ -31,6 +31,8 @@ class FinancialSummary(BaseModel):
     budget_remaining: Money | None
     # Metrics that aren't computed yet -> phase that adds them (values above are null).
     pending: dict[str, int] = {}
+    # Metrics that exist but aren't set up (e.g. no budgets this month, no savings goals).
+    not_configured: list[str] = []
 
 
 class TaskItem(BaseModel):

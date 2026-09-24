@@ -82,6 +82,29 @@ export const emptySummary = {
   by_category: [],
 };
 
+export const emptyBudgetMonth = {
+  month: "2026-09",
+  currency: "NPR",
+  total_budget: "0.00",
+  total_spent: "0.00",
+  total_remaining: "0.00",
+  percent_used: "0.0",
+  unbudgeted_spent: "0.00",
+  budgets: [],
+};
+
+export const emptyBills = {
+  currency: "NPR",
+  items: [],
+  overdue_count: 0,
+  overdue_total: "0.00",
+  due_soon_count: 0,
+  due_soon_total: "0.00",
+  paid_this_month_total: "0.00",
+};
+
+export const emptySavings = { currency: "NPR", total_saved: "0.00", total_target: "0.00", progress_percent: "0.0", goals: [] };
+
 type Reply = { status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
 type Handler = (init: RequestInit & { url: string }) => Reply;
 
@@ -111,6 +134,9 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/expenses": { status: 200, body: emptyPage },
     "GET /api/incomes/summary": { status: 200, body: emptySummary },
     "GET /api/expenses/summary": { status: 200, body: emptySummary },
+    "GET /api/budgets": (init) => ({ status: 200, body: { ...emptyBudgetMonth, month: new URL(init.url, "http://x").searchParams.get("month") ?? "2026-09" } }),
+    "GET /api/bills": { status: 200, body: emptyBills },
+    "GET /api/savings-goals": { status: 200, body: emptySavings },
     ...routes,
   };
 

@@ -4,9 +4,15 @@ import { StatCard } from "./stat-card";
 
 export function FinancialSummary({ finance, loading }: { finance?: DashboardSummary["finance"]; loading: boolean }) {
   const unavailable = finance && !finance.available;
+  const SETUP_HINTS: Record<string, string> = {
+    savings: "No savings goals yet",
+    budget_remaining: "No budget set for this month",
+  };
   const pendingHint = (metric: string) => {
     const phase = finance?.pending?.[metric];
-    return phase ? `Arrives in Phase ${phase}` : undefined;
+    if (phase) return `Arrives in Phase ${phase}`;
+    if (finance?.not_configured?.includes(metric)) return SETUP_HINTS[metric];
+    return undefined;
   };
 
   return (

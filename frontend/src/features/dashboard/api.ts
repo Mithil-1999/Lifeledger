@@ -46,6 +46,8 @@ export interface DashboardSummary {
     budget_remaining: Money | null;
     /** Metrics not computed yet -> phase that adds them. */
     pending?: Record<string, number>;
+    /** Metrics that exist but aren't set up (no budgets this month, no savings goals). */
+    not_configured?: string[];
   };
   tasks: Section & { today: TaskItem[]; pending: TaskItem[]; overdue: TaskItem[] };
   bills: Section & { upcoming: BillItem[]; overdue: BillItem[] };

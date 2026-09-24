@@ -27,7 +27,7 @@ def test_dashboard_summary_for_signed_in_user(client):
 
 
 @requires_db
-def test_new_user_gets_real_zeros_and_pending_modules(client):
+def test_new_user_gets_real_zeros_and_unconfigured_modules(client):
     register(client)
     body = client.get("/api/dashboard/summary").json()
 
@@ -35,15 +35,16 @@ def test_new_user_gets_real_zeros_and_pending_modules(client):
     assert finance["available"] is True
     zero = {"amount": "0.00", "currency": "NPR"}
     assert finance["monthly_income"] == finance["monthly_expenses"] == finance["current_balance"] == zero
-    # Not built yet: no invented values, and the phase that adds them.
+    # Nothing set up yet: no invented values, just "not configured".
     assert finance["savings"] is None and finance["budget_remaining"] is None
-    assert finance["pending"] == {"savings": 5, "budget_remaining": 5}
+    assert finance["pending"] == {}
+    assert finance["not_configured"] == ["savings", "budget_remaining"]
 
     assert body["tasks"] == {"available": False, "available_from_phase": 6, "today": [], "pending": [], "overdue": []}
-    assert body["bills"] == {"available": False, "available_from_phase": 5, "upcoming": [], "overdue": []}
+    assert body["bills"] == {"available": True, "available_from_phase": None, "upcoming": [], "overdue": []}
     assert body["reminders"] == {"available": False, "available_from_phase": 6, "upcoming": []}
     charts = body["charts"]
-    assert charts["available"] is True and charts["pending"] == {"savings": 5}
+    assert charts["available"] is True and charts["pending"] == {}
     # No records yet -> no chart series (the UI shows empty states).
     assert all(charts[k] == [] for k in ("income_vs_expenses", "expense_categories", "monthly_spending", "savings"))
 

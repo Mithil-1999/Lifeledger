@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Category, Expense, Income
+from app.models import Budget, Category, Expense, Income
 
 LEDGER_MODELS = {"income": Income, "expense": Expense}
 
@@ -87,5 +87,9 @@ def delete_category(db: Session, user_id: uuid.UUID, category_id: uuid.UUID) -> 
         raise CategoryError(
             f"This category is used by {in_use} {noun}. Move them to another category first.", 409
         )
+    budgets = db.scalar(select(func.count()).select_from(Budget).where(Budget.category_id == category.id))
+    if budgets:
+        noun = "budget" if budgets == 1 else "budgets"
+        raise CategoryError(f"This category has {budgets} {noun}. Delete them first.", 409)
     db.delete(category)
     db.commit()

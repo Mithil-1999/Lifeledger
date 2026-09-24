@@ -65,10 +65,10 @@ describe("authenticated dashboard", () => {
     const user = userEvent.setup();
     const { router } = renderApp("/dashboard");
 
-    for (const label of ["Add income", "Add expense"]) {
+    for (const label of ["Add income", "Add expense", "Add bill"]) {
       expect(await screen.findByRole("link", { name: label })).toBeInTheDocument();
     }
-    for (const label of ["Add task", "Add reminder", "Add bill"]) {
+    for (const label of ["Add task", "Add reminder"]) {
       expect(await screen.findByRole("button", { name: label })).toBeInTheDocument();
     }
     await user.click(screen.getByRole("button", { name: "Add task" }));
@@ -95,8 +95,8 @@ describe("authenticated dashboard", () => {
     mockApi();
     const user = userEvent.setup();
     renderApp("/dashboard");
-    await user.click(await screen.findByRole("button", { name: "Add bill" }));
-    expect(await screen.findByRole("dialog", { name: "Add bill: coming in Phase 5" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Add reminder" }));
+    expect(await screen.findByRole("dialog", { name: "Add reminder: coming in Phase 6" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });

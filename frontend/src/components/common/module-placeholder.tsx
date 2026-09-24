@@ -19,7 +19,7 @@ export function ModulePlaceholder({ path }: { path: string }) {
         description={item.description}
         actions={
           <Badge variant="outline">
-            <CircleDashed aria-hidden /> Planned · Phase {item.phase}
+            <CircleDashed aria-hidden /> {item.phase ? `Planned · Phase ${item.phase}` : "Planned"}
           </Badge>
         }
       />

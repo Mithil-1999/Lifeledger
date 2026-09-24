@@ -94,7 +94,9 @@ export function DashboardPage() {
                 >
                   <Icon className="size-4 shrink-0 text-primary" aria-hidden />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.title}</span>
-                  {!isLive(item) && <span className="text-[11px] text-muted-foreground">Phase {item.phase}</span>}
+                  {!isLive(item) && (
+                    <span className="text-[11px] text-muted-foreground">{item.phase ? `Phase ${item.phase}` : "Planned"}</span>
+                  )}
                   <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
                 </Link>
               );
