@@ -6,7 +6,7 @@ invented statistics. Later phases fill these in from real database data.
 """
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from pydantic import BaseModel
 
@@ -40,14 +40,18 @@ class TaskItem(BaseModel):
     title: str
     due_date: date | None
     priority: str | None
+    due_time: time | None = None
+    status: str | None = None
 
 
 class TasksSummary(BaseModel):
     available: bool
     available_from_phase: int | None
-    today: list[TaskItem]
-    pending: list[TaskItem]
-    overdue: list[TaskItem]
+    today: list[TaskItem]  # open tasks due today
+    pending: list[TaskItem]  # "Not Started" tasks that aren't overdue
+    overdue: list[TaskItem]  # open tasks past their due date/time
+    # Full counts (the lists above are capped for the dashboard).
+    counts: dict[str, int] = {}
 
 
 class BillItem(BaseModel):
@@ -67,13 +71,15 @@ class BillsSummary(BaseModel):
 class ReminderItem(BaseModel):
     id: uuid.UUID
     title: str
-    remind_at: datetime
+    remind_at: datetime  # when it next fires (snooze-aware)
+    is_due: bool = False
 
 
 class RemindersSummary(BaseModel):
     available: bool
     available_from_phase: int | None
-    upcoming: list[ReminderItem]
+    upcoming: list[ReminderItem]  # due ones first, then soonest
+    due_count: int = 0
 
 
 class MonthlyPoint(BaseModel):

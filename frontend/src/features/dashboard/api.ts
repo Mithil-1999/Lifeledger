@@ -11,7 +11,9 @@ export interface TaskItem {
   id: string;
   title: string;
   due_date: string | null;
+  due_time?: string | null;
   priority: string | null;
+  status?: string | null;
 }
 
 export interface BillItem {
@@ -25,6 +27,7 @@ export interface ReminderItem {
   id: string;
   title: string;
   remind_at: string;
+  is_due?: boolean;
 }
 
 export interface MonthlyPoint {
@@ -49,9 +52,9 @@ export interface DashboardSummary {
     /** Metrics that exist but aren't set up (no budgets this month, no savings goals). */
     not_configured?: string[];
   };
-  tasks: Section & { today: TaskItem[]; pending: TaskItem[]; overdue: TaskItem[] };
+  tasks: Section & { today: TaskItem[]; pending: TaskItem[]; overdue: TaskItem[]; counts?: Record<string, number> };
   bills: Section & { upcoming: BillItem[]; overdue: BillItem[] };
-  reminders: Section & { upcoming: ReminderItem[] };
+  reminders: Section & { upcoming: ReminderItem[]; due_count?: number };
   charts: Section & {
     income_vs_expenses: MonthlyPoint[];
     expense_categories: { category: string; amount: string }[];

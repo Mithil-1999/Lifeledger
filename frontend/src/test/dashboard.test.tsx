@@ -60,24 +60,16 @@ describe("authenticated dashboard", () => {
     expect(await screen.findAllByText(/Charts fill in automatically once you record income and expenses \(Phase 4\)/)).toHaveLength(4);
   });
 
-  it("quick actions explain the feature is coming instead of pretending to work", async () => {
+  it("every quick action opens its real form", async () => {
     mockApi();
     const user = userEvent.setup();
     const { router } = renderApp("/dashboard");
-
-    for (const label of ["Add income", "Add expense", "Add bill"]) {
-      expect(await screen.findByRole("link", { name: label })).toBeInTheDocument();
+    for (const label of ["Add income", "Add expense", "Add task", "Add reminder", "Add bill"]) {
+      expect(await screen.findByRole("link", { name: label })).toHaveAttribute("href", expect.stringContaining("?new=1"));
     }
-    for (const label of ["Add task", "Add reminder"]) {
-      expect(await screen.findByRole("button", { name: label })).toBeInTheDocument();
-    }
-    await user.click(screen.getByRole("button", { name: "Add task" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add task: coming in Phase 6" });
-    expect(within(dialog).getByText(/nothing can be saved here/)).toBeInTheDocument();
-
-    await user.click(within(dialog).getByRole("link", { name: "Open Tasks" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/tasks"));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Add task" }));
+    expect(await screen.findByRole("dialog", { name: "Add task" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/tasks");
   });
 
   it("Add expense opens the real expense form", async () => {
@@ -91,12 +83,12 @@ describe("authenticated dashboard", () => {
     await waitFor(() => expect(router.state.location.search).toBe(""));
   });
 
-  it("closes the quick action dialog with Escape", async () => {
+  it("closes a quick-action form with Escape", async () => {
     mockApi();
     const user = userEvent.setup();
     renderApp("/dashboard");
-    await user.click(await screen.findByRole("button", { name: "Add reminder" }));
-    expect(await screen.findByRole("dialog", { name: "Add reminder: coming in Phase 6" })).toBeInTheDocument();
+    await user.click(await screen.findByRole("link", { name: "Add reminder" }));
+    expect(await screen.findByRole("dialog", { name: "Add reminder" })).toBeInTheDocument();
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });

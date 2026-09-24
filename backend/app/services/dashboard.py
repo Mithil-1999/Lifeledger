@@ -1,8 +1,8 @@
 """Builds the dashboard summary for a user.
 
-Income, expenses, balance, budgets, savings and bills come from the user's real records.
-Tasks and reminders (Phase 6) are reported as unavailable, with no values, until those
-modules exist. The response contract stays the same.
+Every section comes from the user's real records: income, expenses, balance, budgets,
+savings, bills, tasks and reminders. Nothing is estimated or invented; figures that aren't
+set up (no budgets, no savings goals) are reported as such instead of as zero.
 """
 
 import calendar
@@ -22,19 +22,20 @@ from app.schemas.dashboard import (
     FinancialSummary,
     MonthlyPoint,
     Period,
+    ReminderItem,
     RemindersSummary,
+    TaskItem,
     TasksSummary,
 )
 from app.services import bills as bill_service
 from app.services import budgets as budget_service
 from app.services import ledger
+from app.services import reminders as reminder_service
 from app.services import savings as savings_service
-
-# Phase in which each not-yet-built part starts reporting real data.
-TASKS_PHASE = 6
-REMINDERS_PHASE = 6
+from app.services import tasks as task_service
 
 TREND_MONTHS = 6
+DASHBOARD_LIST_LIMIT = 5  # items per dashboard list (full counts are reported separately)
 
 
 def current_period(now: datetime | None = None) -> Period:
@@ -114,11 +115,32 @@ def _charts_section(db: Session, user: User, period: Period) -> ChartsData:
     )
 
 
-def _tasks_section() -> TasksSummary:
-    return TasksSummary(available=False, available_from_phase=TASKS_PHASE, today=[], pending=[], overdue=[])
+def _task_item(task: dict) -> TaskItem:
+    return TaskItem(
+        id=task["id"],
+        title=task["title"],
+        due_date=task["due_date"],
+        due_time=task["due_time"],
+        priority=task["priority"],
+        status=task["status"],
+    )
 
 
-DASHBOARD_LIST_LIMIT = 5
+def _tasks_section(db: Session, user: User, now: datetime) -> TasksSummary:
+    local = task_service.local_now(now)
+    today = task_service.list_tasks(db, user.id, "today", now=local)
+    overdue = task_service.list_tasks(db, user.id, "overdue", now=local)
+    pending = task_service.pending_tasks(db, user.id, now=local)
+    # "Pending" = Not Started and not overdue (overdue ones are shown under Overdue).
+    not_started = pending["due_soon"] + pending["not_started"]
+    return TasksSummary(
+        available=True,
+        available_from_phase=None,
+        today=[_task_item(t) for t in today["items"][:DASHBOARD_LIST_LIMIT]],
+        pending=[_task_item(t) for t in not_started[:DASHBOARD_LIST_LIMIT]],
+        overdue=[_task_item(t) for t in overdue["items"][:DASHBOARD_LIST_LIMIT]],
+        counts={"today": len(today["items"]), "pending": len(not_started), "overdue": len(overdue["items"])},
+    )
 
 
 def _bills_section(db: Session, user: User, period: Period, currency: str) -> BillsSummary:
@@ -137,20 +159,32 @@ def _bills_section(db: Session, user: User, period: Period, currency: str) -> Bi
     )
 
 
-def _reminders_section() -> RemindersSummary:
-    return RemindersSummary(available=False, available_from_phase=REMINDERS_PHASE, upcoming=[])
+def _reminders_section(db: Session, user: User, now: datetime) -> RemindersSummary:
+    active = reminder_service.list_reminders(db, user.id, "due", now=now)["items"] + reminder_service.list_reminders(
+        db, user.id, "upcoming", now=now
+    )["items"]
+    return RemindersSummary(
+        available=True,
+        available_from_phase=None,
+        upcoming=[
+            ReminderItem(id=r["id"], title=r["title"], remind_at=r["effective_at"], is_due=r["is_due"])
+            for r in active[:DASHBOARD_LIST_LIMIT]
+        ],
+        due_count=sum(1 for r in active if r["is_due"]),
+    )
 
 
 def build_dashboard_summary(db: Session, user: User, now: datetime | None = None) -> DashboardSummary:
     currency = get_settings().default_currency
-    period = current_period(now)
+    moment = now or datetime.now(UTC)
+    period = current_period(moment)
     return DashboardSummary(
         currency=currency,
         period=period,
         generated_at=datetime.now(UTC),
         finance=_finance_section(db, user, period, currency),
-        tasks=_tasks_section(),
+        tasks=_tasks_section(db, user, moment),
         bills=_bills_section(db, user, period, currency),
-        reminders=_reminders_section(),
+        reminders=_reminders_section(db, user, moment),
         charts=_charts_section(db, user, period),
     )

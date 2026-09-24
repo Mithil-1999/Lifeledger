@@ -105,6 +105,10 @@ export const emptyBills = {
 
 export const emptySavings = { currency: "NPR", total_saved: "0.00", total_target: "0.00", progress_percent: "0.0", goals: [] };
 
+export const emptyTaskList = { view: "all", items: [], counts: { today: 0, upcoming: 0, overdue: 0, completed: 0, all: 0 } };
+
+export const emptyReminderList = { view: "all", items: [], counts: { due: 0, upcoming: 0, completed: 0, all: 0 } };
+
 type Reply = { status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
 type Handler = (init: RequestInit & { url: string }) => Reply;
 
@@ -137,6 +141,10 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/budgets": (init) => ({ status: 200, body: { ...emptyBudgetMonth, month: new URL(init.url, "http://x").searchParams.get("month") ?? "2026-09" } }),
     "GET /api/bills": { status: 200, body: emptyBills },
     "GET /api/savings-goals": { status: 200, body: emptySavings },
+    "GET /api/tasks": (init) => ({ status: 200, body: { ...emptyTaskList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "all" } }),
+    "GET /api/tasks/pending": { status: 200, body: { due_soon_days: 3, overdue: [], due_soon: [], not_started: [] } },
+    "GET /api/tasks/categories": { status: 200, body: [] },
+    "GET /api/reminders": (init) => ({ status: 200, body: { ...emptyReminderList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "all" } }),
     ...routes,
   };
 

@@ -40,9 +40,16 @@ def test_new_user_gets_real_zeros_and_unconfigured_modules(client):
     assert finance["pending"] == {}
     assert finance["not_configured"] == ["savings", "budget_remaining"]
 
-    assert body["tasks"] == {"available": False, "available_from_phase": 6, "today": [], "pending": [], "overdue": []}
+    assert body["tasks"] == {
+        "available": True,
+        "available_from_phase": None,
+        "today": [],
+        "pending": [],
+        "overdue": [],
+        "counts": {"today": 0, "pending": 0, "overdue": 0},
+    }
     assert body["bills"] == {"available": True, "available_from_phase": None, "upcoming": [], "overdue": []}
-    assert body["reminders"] == {"available": False, "available_from_phase": 6, "upcoming": []}
+    assert body["reminders"] == {"available": True, "available_from_phase": None, "upcoming": [], "due_count": 0}
     charts = body["charts"]
     assert charts["available"] is True and charts["pending"] == {}
     # No records yet -> no chart series (the UI shows empty states).

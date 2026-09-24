@@ -16,9 +16,31 @@ from app.models.planning import (
     SavingsContribution,
     SavingsGoal,
 )
+from app.models.productivity import (
+    OPEN_TASK_STATUSES,
+    PRIORITY_RANK,
+    IntervalUnit,
+    Reminder,
+    ReminderRepeat,
+    ReminderStatus,
+    Task,
+    TaskPriority,
+    TaskRecurrence,
+    TaskStatus,
+)
 from app.models.user import PasswordResetToken, User, UserSession, UserStatus
 
 __all__ = [
+    "OPEN_TASK_STATUSES",
+    "PRIORITY_RANK",
+    "IntervalUnit",
+    "Reminder",
+    "ReminderRepeat",
+    "ReminderStatus",
+    "Task",
+    "TaskPriority",
+    "TaskRecurrence",
+    "TaskStatus",
     "BILL_EXPENSE_CATEGORY",
     "Base",
     "Bill",

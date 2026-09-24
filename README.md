@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phase 5 (Budget, Bills & Savings).** You get secure accounts, a personal dashboard, income and expense management, monthly category budgets with warning thresholds, recurring bills (pending, paid and overdue), and savings goals with progress tracking. Everything on the dashboard except tasks and reminders comes from your real records. Tasks, reminders and the remaining modules are built in the later phases listed below.
+> **Status: Phase 6 (Tasks & Reminders).** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings goals, and now tasks (priorities, statuses, due dates, recurring tasks, and a “you haven’t worked on these” list) and reminders (one-time, daily, weekly, monthly, yearly, custom; with snooze and complete). Every dashboard section is driven by your real records. The remaining modules are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -29,18 +29,19 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   ├── router.py        Public routers + `protected_router` (auth required)
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
 │   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
-│   │   │                        planning (budgets/bills/savings)
+│   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders)
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
 │   │   ├── models/              user.py, finance.py (categories, incomes, expenses),
-│   │   │                        planning.py (budgets, bills, bill payments, savings goals)
+│   │   │                        planning.py (budgets, bills, bill payments, savings goals),
+│   │   │                        productivity.py (tasks, reminders)
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
 │   │   │                        budgets, bills, savings
 │   │   └── main.py              App factory: CORS, middleware, routers
 │   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
-│   │                            → 0004 budgets/bills/savings
+│   │                            → 0004 budgets/bills/savings → 0005 tasks/reminders
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
 │   ├── Dockerfile
@@ -60,6 +61,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── features/dashboard/  Dashboard data hook, stat cards, panels, quick actions, charts
 │   │   ├── features/finance/    Income/expense API, forms, filters, table, category manager
 │   │   ├── features/planning/   Budgets, bills and savings API + constants
+│   │   ├── features/productivity/ Tasks and reminders API + constants
 │   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
@@ -232,6 +234,17 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 | GET / POST | `/api/savings-goals`    | ✔ | Goals with progress and totals, or create a goal |
 | GET / PUT / DELETE | `/api/savings-goals/{id}` | ✔ | Read, update, or delete a goal (changing the balance logs an adjustment) |
 | GET / POST | `/api/savings-goals/{id}/contributions` | ✔ | History, or `{kind: deposit or withdrawal, amount, date, note}` |
+| GET    | `/api/tasks?view=&status=&priority=&category=&search=` | ✔ | `view` is today, upcoming, overdue, completed or all. Returns the items plus counts for every view |
+| GET    | `/api/tasks/pending`        | ✔ | “You haven't worked on these tasks”: *Not started* tasks, split into overdue, due soon (3 days) and the rest |
+| GET    | `/api/tasks/categories`     | ✔ | Categories you've used |
+| POST   | `/api/tasks`                | ✔ | Create a task |
+| GET / PUT / DELETE | `/api/tasks/{id}`  | ✔ | Read, replace, or delete one task |
+| PATCH  | `/api/tasks/{id}/status`    | ✔ | `{status}`. Completing a recurring task creates its next occurrence |
+| GET    | `/api/reminders?view=`      | ✔ | `view` is due, upcoming, completed or all. Returns the items plus counts |
+| POST   | `/api/reminders`            | ✔ | `{title, notes, remind_at (ISO with timezone), repeat, interval_count, interval_unit}` |
+| GET / PUT / DELETE | `/api/reminders/{id}` | ✔ | Read, replace (which reactivates it and clears any snooze), or delete |
+| POST   | `/api/reminders/{id}/snooze` | ✔ | `{minutes}` or `{until}` |
+| POST   | `/api/reminders/{id}/complete` | ✔ | One-time reminders become completed; repeating ones move to the next occurrence |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
@@ -273,6 +286,27 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - Progress shows the percentage saved and the amount left. With a target date, it also shows how much to save per month, rounded **up** to the cent so paying it actually reaches the goal.
 - **Dashboard:** *Budget remaining* covers this month's budgets, and *Savings* is the total across your goals. Both say "not set up yet" instead of showing 0 when you have no budgets or goals. The bills panel lists overdue bills and those due in the next 30 days, and the savings chart shows the last 6 months.
 - **Debts** isn't in any scheduled phase yet, so its page stays a placeholder. Loan repayments can be tracked as *Loan* bills in the meantime.
+
+## Tasks & reminders
+
+- **Task fields:** title, description, category (free text with suggestions), priority (Low, Medium, High, Urgent), status (Not started, In progress, Completed, Cancelled), due date, due time, recurring (daily, weekly, monthly or yearly), created date, and completed date (set automatically on completion and cleared when a task is reopened).
+- **Views:** *Today* (open tasks due today), *Upcoming* (due later), *Overdue*, *Completed* and *All*, each with a count. You can also filter by priority, category, status and text search.
+- **Overdue is derived, never stored.** An open task is overdue once its due date has passed, or once its due time has passed on the due date, in `APP_TIMEZONE`. A task with no due time is due by the end of that day. Completed and cancelled tasks are never overdue.
+- **“You haven't worked on these tasks”** is based **only on the stored status**: tasks still *Not started*, grouped into overdue, due within 3 days, and the rest. Nothing is inferred from your activity.
+- **Recurring tasks:** completing one records the completion and creates the next occurrence, with the same details and the next due date.
+  - Missed occurrences are skipped, so you never get a pile of past-due copies.
+  - A task due on the 31st returns to the 31st after shorter months.
+  - Reopening and completing again doesn't create a duplicate.
+- **Reminders** can be one-time, daily, weekly, monthly, yearly, or custom (“every N days/weeks/months/years”).
+  - *Times:* reminder times are stored in UTC and repeat on the local wall clock, so a 9:00 reminder stays at 9:00. The API rejects times without a timezone offset.
+  - *Snoozing* (10 minutes, 1 hour, 3 hours, or tomorrow at 9:00) delays when a reminder fires.
+  - *Completing* finishes a one-time reminder, or moves a repeating one to its next future occurrence.
+  - *Editing* reactivates a reminder and clears any snooze.
+- **Delivery:** in this phase, reminders appear as **Due now** inside LifeVault (the page refreshes every minute). Push, email and browser notifications are Phase 11.
+- **Dashboard:**
+  - *Tasks:* Today, Not started (excluding overdue) and Overdue, with full counts.
+  - *Reminders:* due and upcoming reminders.
+  - *Quick actions:* all five open the real “add” forms.
 
 ## Dashboard
 
@@ -339,7 +373,7 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
 | 3     | Dashboard ✅                               |
 | 4     | Income and expenses ✅                     |
 | 5     | Budget, bills, rent and savings ✅         |
-| 6     | Tasks and reminders                        |
+| 6     | Tasks and reminders ✅                     |
 | 7     | Secure password vault                      |
 | 8     | Notes and documents                        |
 | 9     | Calendar                                   |

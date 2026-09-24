@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 /** Highest completed build phase; modules with phase <= this are live (not placeholders). */
-export const CURRENT_PHASE = 5;
+export const CURRENT_PHASE = 6;
 
 export function isLive(item: { phase: number | null }) {
   return item.phase !== null && item.phase <= CURRENT_PHASE;
