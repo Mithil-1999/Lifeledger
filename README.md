@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phase 2 (Authentication).** You get the full-stack foundation plus secure accounts: registration, login/logout, protected pages and APIs, change password, and password reset. Each business module is still a placeholder page, and its features are built in the later phases listed below.
+> **Status: Phase 3 (Dashboard).** You get the full-stack foundation, secure accounts, and an authenticated personal dashboard with a financial summary, tasks, bills, reminders, charts and quick actions. Until the finance, bills, task and reminder modules exist, the dashboard shows honest empty states, never made-up numbers. Those modules are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -12,12 +12,12 @@ Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for m
 
 | Layer    | Technology                                                                                          |
 | -------- | --------------------------------------------------------------------------------------------------- |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui-style components (Radix UI), React Router, TanStack Query, React Hook Form + Zod, Sonner toasts, Lucide icons |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui-style components (Radix UI), React Router, TanStack Query, React Hook Form + Zod, Recharts, Sonner toasts, Lucide icons |
 | Backend  | Python, FastAPI, Pydantic v2 / pydantic-settings, SQLAlchemy 2.0, Alembic, Argon2 (argon2-cffi)      |
 | Database | PostgreSQL 17 (psycopg 3 driver)                                                                    |
 | Tooling  | Docker, Docker Compose, Vitest + Testing Library, pytest, ESLint                                    |
 
-Recharts is part of the planned stack. It's added in the phase that first needs charts.
+Recharts is loaded lazily in its own bundle chunk, so pages without charts (like login) never download it.
 
 ## Project structure
 
@@ -82,6 +82,7 @@ Then edit `.env`:
 | `FRONTEND_URL`          | Allowed CORS origin (the SPA).                                           |
 | `BACKEND_URL`           | Public URL of the API.                                                   |
 | `VITE_API_PROXY_TARGET` | Where the Vite dev server proxies `/api` requests.                       |
+| `APP_TIMEZONE`          | IANA timezone for "today" and month boundaries (default `Asia/Kathmandu`). |
 | `REGISTRATION_ENABLED`  | Allow new sign-ups. **Set to `false` once your account exists.**        |
 | `COOKIE_SECURE`         | Send cookies only over HTTPS. Must be `true` in production.              |
 | `SESSION_IDLE_TIMEOUT_MINUTES` / `SESSION_LIFETIME_HOURS` / `SESSION_REMEMBER_ME_DAYS` | Session expiry. |
@@ -202,9 +203,21 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 | POST   | `/api/auth/forgot-password` | –    | Always 202 with the same message (no account enumeration) |
 | POST   | `/api/auth/reset-password`  | –    | `{token, new_password, confirm_new_password}` (204) |
 | GET    | `/api/auth/me`              | ✔    | Current user |
+| GET    | `/api/dashboard/summary`    | ✔    | Everything the dashboard shows, scoped to the signed-in user (see below) |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
+
+## Dashboard
+
+`GET /api/dashboard/summary` returns one payload with these sections: `finance` (monthly income, expenses, balance, savings, budget remaining), `tasks` (today, pending, overdue), `bills` (upcoming, overdue), `reminders` (upcoming) and `charts` (income vs expenses, expense categories, monthly spending, savings). It also returns the current `period`.
+
+- Each section has `available` and `available_from_phase`. Until a module exists, its values are `null` or empty lists, and the UI shows an empty state that says which phase adds it. No placeholder numbers are ever sent or shown.
+- **Money** is a Decimal on the server and a string in JSON (`{"amount": "1234.50", "currency": "NPR"}`), so no precision is lost. The UI formats NPR with South Asian grouping (`NPR 12,34,567.50`).
+- **"Today" and month boundaries** use `APP_TIMEZONE` (default `Asia/Kathmandu`), not the server's clock zone.
+- Later phases fill a section by replacing its builder in `backend/app/services/dashboard.py` with real queries filtered by `user.id`. The response shape stays the same.
+- Reusable chart components live in `frontend/src/components/charts/` (`IncomeExpenseChart`, `ExpenseCategoryChart`, `MonthlySpendingChart`, `SavingsChart`, `ChartCard`). Each includes a screen-reader data table.
+- **Quick actions** (Add income, expense, task, reminder, bill) open a "Coming in Phase N" dialog until their forms exist. Nothing pretends to save.
 
 ## Authentication design
 
@@ -257,7 +270,7 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
 | ----- | ------------------------------------------ |
 | 1     | Project foundation ✅                      |
 | 2     | Authentication ✅                          |
-| 3     | Dashboard                                  |
+| 3     | Dashboard ✅                               |
 | 4     | Income and expenses                        |
 | 5     | Budget, bills, rent and savings            |
 | 6     | Tasks and reminders                        |

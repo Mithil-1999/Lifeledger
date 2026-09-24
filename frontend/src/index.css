@@ -30,6 +30,13 @@
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.35 0.02 264);
   --sidebar-border: oklch(0.93 0.006 264);
+  /* Categorical chart palette (distinguishable in light and dark). */
+  --chart-1: oklch(0.55 0.2 277);
+  --chart-2: oklch(0.65 0.16 160);
+  --chart-3: oklch(0.72 0.16 65);
+  --chart-4: oklch(0.62 0.2 20);
+  --chart-5: oklch(0.6 0.13 230);
+  --chart-grid: oklch(0.92 0.006 264);
 }
 
 .dark {
@@ -57,6 +64,12 @@
   --sidebar: oklch(0.18 0.013 264);
   --sidebar-foreground: oklch(0.8 0.012 264);
   --sidebar-border: oklch(0.27 0.014 264);
+  --chart-1: oklch(0.7 0.16 277);
+  --chart-2: oklch(0.74 0.14 160);
+  --chart-3: oklch(0.8 0.14 70);
+  --chart-4: oklch(0.7 0.17 20);
+  --chart-5: oklch(0.72 0.12 230);
+  --chart-grid: oklch(0.3 0.014 264);
 }
 
 @theme inline {

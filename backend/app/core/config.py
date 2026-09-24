@@ -7,6 +7,7 @@ then from the repository-root `.env`. Real secrets must never be committed.
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,6 +43,8 @@ class Settings(BaseSettings):
     cors_extra_origins: str = ""
 
     default_currency: str = "NPR"
+    # Defines "today" and month boundaries for dashboards and reports.
+    app_timezone: str = "Asia/Kathmandu"
 
     # --- Authentication -------------------------------------------------------------
     # LifeVault is a private app: disable registration once your account exists.
@@ -75,6 +78,19 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_starttls: bool = True
+
+    @field_validator("app_timezone")
+    @classmethod
+    def _valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"APP_TIMEZONE {value!r} is not a valid IANA timezone (e.g. Asia/Kathmandu).") from None
+        return value
+
+    @property
+    def timezone(self) -> ZoneInfo:
+        return ZoneInfo(self.app_timezone)
 
     @field_validator("database_url")
     @classmethod

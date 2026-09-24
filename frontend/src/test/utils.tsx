@@ -26,7 +26,34 @@ export const healthyBody = {
   database: "ok",
 };
 
-type Reply = { status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
+/** What the API returns today: every module reports "not available yet", with no numbers. */
+export const emptyDashboard = {
+  currency: "NPR",
+  period: { label: "September 2026", start: "2026-09-01", end: "2026-09-30", today: "2026-09-24", timezone: "Asia/Kathmandu" },
+  generated_at: "2026-09-24T03:00:00Z",
+  finance: {
+    available: false,
+    available_from_phase: 4,
+    monthly_income: null,
+    monthly_expenses: null,
+    current_balance: null,
+    savings: null,
+    budget_remaining: null,
+  },
+  tasks: { available: false, available_from_phase: 6, today: [], pending: [], overdue: [] },
+  bills: { available: false, available_from_phase: 5, upcoming: [], overdue: [] },
+  reminders: { available: false, available_from_phase: 6, upcoming: [] },
+  charts: {
+    available: false,
+    available_from_phase: 4,
+    income_vs_expenses: [],
+    expense_categories: [],
+    monthly_spending: [],
+    savings: [],
+  },
+};
+
+type Reply ={ status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
 type Handler = (init: RequestInit & { url: string }) => Reply;
 
 export interface MockApiOptions {
@@ -44,6 +71,8 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/auth/config": { status: 200, body: { registration_enabled: true, password_min_length: 12 } },
     "GET /api/auth/me": user ? { status: 200, body: user } : { status: 401, body: { detail: "Not authenticated." } },
     "GET /api/health": health,
+    // Only requested once signed in (the guard blocks it otherwise), e.g. right after register/login.
+    "GET /api/dashboard/summary": { status: 200, body: emptyDashboard },
     "POST /api/auth/logout": { status: 204 },
     ...routes,
   };

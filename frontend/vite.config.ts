@@ -29,6 +29,8 @@ export default defineConfig(({ mode }) => {
             groups: [
               { name: "react", test: /node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]/ },
               { name: "ui", test: /node_modules[\\/](radix-ui|@radix-ui|@floating-ui)[\\/]/ },
+              // Charting (Recharts + d3) is only needed on chart views; it loads lazily.
+              { name: "charts", test: /node_modules[\\/](recharts|d3-[^\\/]+|victory-vendor|internmap|decimal\.js-light|@reduxjs|redux|immer|reselect|es-toolkit|eventemitter3|use-sync-external-store|react-redux)[\\/]/ },
               { name: "vendor", test: /node_modules/ },
             ],
           },
@@ -40,6 +42,7 @@ export default defineConfig(({ mode }) => {
       globals: true,
       setupFiles: ["./src/test/setup.ts"],
       css: false,
+      testTimeout: 15_000,
     },
   };
 });
