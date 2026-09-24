@@ -15,8 +15,8 @@ interface QuickAction {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { label: "Add income", icon: TrendingUp, modulePath: "/income", implemented: false },
-  { label: "Add expense", icon: CirclePlus, modulePath: "/expenses", implemented: false },
+  { label: "Add income", icon: TrendingUp, modulePath: "/income", implemented: true },
+  { label: "Add expense", icon: CirclePlus, modulePath: "/expenses", implemented: true },
   { label: "Add task", icon: ListPlus, modulePath: "/tasks", implemented: false },
   { label: "Add reminder", icon: BellPlus, modulePath: "/reminders", implemented: false },
   { label: "Add bill", icon: ReceiptText, modulePath: "/bills", implemented: false },
@@ -72,6 +72,17 @@ export function QuickActions() {
       <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible">
         {QUICK_ACTIONS.map((action) => {
           const Icon = action.icon;
+          if (action.implemented) {
+            // Opens the module page with its "add" form already showing.
+            return (
+              <Button key={action.label} variant="outline" className="shrink-0 bg-card" asChild>
+                <Link to={`${action.modulePath}?new=1`}>
+                  <Icon className="text-primary" aria-hidden />
+                  {action.label}
+                </Link>
+              </Button>
+            );
+          }
           return (
             <Button key={action.label} variant="outline" className="shrink-0 bg-card" onClick={() => setPending(action)}>
               <Icon className="text-primary" aria-hidden />

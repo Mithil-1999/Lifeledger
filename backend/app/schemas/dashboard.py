@@ -29,6 +29,8 @@ class FinancialSummary(BaseModel):
     current_balance: Money | None
     savings: Money | None
     budget_remaining: Money | None
+    # Metrics that aren't computed yet -> phase that adds them (values above are null).
+    pending: dict[str, int] = {}
 
 
 class TaskItem(BaseModel):
@@ -91,6 +93,7 @@ class ChartsData(BaseModel):
     expense_categories: list[CategoryPoint]
     monthly_spending: list[MonthlyPoint]
     savings: list[MonthlyPoint]
+    pending: dict[str, int] = {}
 
 
 class DashboardSummary(BaseModel):

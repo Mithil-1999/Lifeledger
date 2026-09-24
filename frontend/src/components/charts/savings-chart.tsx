@@ -1,4 +1,4 @@
-﻿import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import { formatAmount, formatMonth } from "@/lib/format";
 import { CHART_HEIGHT, axisProps, moneyTick, moneyTooltip, tooltipStyle } from "./chart-utils";
 import { ChartDataTable } from "./chart-data-table";

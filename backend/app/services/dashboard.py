@@ -1,8 +1,8 @@
 """Builds the dashboard summary for a user.
 
-Phase 3 has no finance, task, bill or reminder tables yet, so each section is reported
-as unavailable with no values. Each later phase replaces its `_…_section` builder with
-real queries scoped to `user.id`; the response contract stays the same.
+Finance figures come from the user's real income and expense records (Phase 4).
+Savings and budgets (Phase 5) and tasks/bills/reminders (Phases 5-6) are reported as
+pending, with no values, until those modules exist. The response contract stays the same.
 """
 
 import calendar
@@ -11,22 +11,29 @@ from datetime import UTC, date, datetime
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models import User
+from app.models import Expense, Income, User
+from app.schemas.common import Money
 from app.schemas.dashboard import (
     BillsSummary,
+    CategoryPoint,
     ChartsData,
     DashboardSummary,
     FinancialSummary,
+    MonthlyPoint,
     Period,
     RemindersSummary,
     TasksSummary,
 )
+from app.services import ledger
 
-# Phase in which each dashboard section starts reporting real data.
-FINANCE_PHASE = 4
+# Phase in which each not-yet-built part starts reporting real data.
+SAVINGS_PHASE = 5
+BUDGET_PHASE = 5
 TASKS_PHASE = 6
 BILLS_PHASE = 5
 REMINDERS_PHASE = 6
+
+TREND_MONTHS = 6
 
 
 def current_period(now: datetime | None = None) -> Period:
@@ -43,15 +50,57 @@ def current_period(now: datetime | None = None) -> Period:
     )
 
 
-def _finance_section() -> FinancialSummary:
+def _finance_section(db: Session, user: User, period: Period, currency: str) -> FinancialSummary:
+    income = ledger.sum_between(db, Income, user.id, period.start, period.end)
+    expenses = ledger.sum_between(db, Expense, user.id, period.start, period.end)
+    # Balance = everything earned minus everything spent, up to today (future-dated entries excluded).
+    balance = ledger.sum_between(db, Income, user.id, None, period.today) - ledger.sum_between(
+        db, Expense, user.id, None, period.today
+    )
     return FinancialSummary(
-        available=False,
-        available_from_phase=FINANCE_PHASE,
-        monthly_income=None,
-        monthly_expenses=None,
-        current_balance=None,
+        available=True,
+        available_from_phase=None,
+        monthly_income=Money(amount=income, currency=currency),
+        monthly_expenses=Money(amount=expenses, currency=currency),
+        current_balance=Money(amount=balance, currency=currency),
         savings=None,
         budget_remaining=None,
+        pending={"savings": SAVINGS_PHASE, "budget_remaining": BUDGET_PHASE},
+    )
+
+
+def _charts_section(db: Session, user: User, period: Period) -> ChartsData:
+    this_month = period.start.strftime("%Y-%m")
+    months = [ledger.shift_month(this_month, -offset) for offset in range(TREND_MONTHS - 1, -1, -1)]
+    window_start = ledger.month_bounds(months[0])[0]
+
+    income_by_month = ledger.monthly_totals(db, Income, user.id, window_start, period.end)
+    expense_by_month = ledger.monthly_totals(db, Expense, user.id, window_start, period.end)
+    has_trend_data = bool(income_by_month or expense_by_month)
+
+    def total(by_month: dict, month: str):
+        return by_month.get(month, (ledger.ZERO, 0))[0]
+
+    income_vs_expenses = (
+        [MonthlyPoint(month=m, income=total(income_by_month, m), expenses=total(expense_by_month, m)) for m in months]
+        if has_trend_data
+        else []
+    )
+    monthly_spending = (
+        [MonthlyPoint(month=m, expenses=total(expense_by_month, m)) for m in months] if expense_by_month else []
+    )
+    categories = [
+        CategoryPoint(category=name, amount=amount)
+        for _, name, amount, _ in ledger.category_totals(db, Expense, user.id, period.start, period.end)
+    ]
+    return ChartsData(
+        available=True,
+        available_from_phase=None,
+        income_vs_expenses=income_vs_expenses,
+        expense_categories=categories,
+        monthly_spending=monthly_spending,
+        savings=[],
+        pending={"savings": SAVINGS_PHASE},
     )
 
 
@@ -67,28 +116,16 @@ def _reminders_section() -> RemindersSummary:
     return RemindersSummary(available=False, available_from_phase=REMINDERS_PHASE, upcoming=[])
 
 
-def _charts_section() -> ChartsData:
-    return ChartsData(
-        available=False,
-        available_from_phase=FINANCE_PHASE,
-        income_vs_expenses=[],
-        expense_categories=[],
-        monthly_spending=[],
-        savings=[],
-    )
-
-
 def build_dashboard_summary(db: Session, user: User, now: datetime | None = None) -> DashboardSummary:
-    # `db` and `user` are unused until the feature tables exist; every future query
-    # must filter by user.id.
-    del db, user
+    currency = get_settings().default_currency
+    period = current_period(now)
     return DashboardSummary(
-        currency=get_settings().default_currency,
-        period=current_period(now),
+        currency=currency,
+        period=period,
         generated_at=datetime.now(UTC),
-        finance=_finance_section(),
+        finance=_finance_section(db, user, period, currency),
         tasks=_tasks_section(),
         bills=_bills_section(),
         reminders=_reminders_section(),
-        charts=_charts_section(),
+        charts=_charts_section(db, user, period),
     )

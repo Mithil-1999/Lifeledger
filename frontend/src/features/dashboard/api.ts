@@ -44,6 +44,8 @@ export interface DashboardSummary {
     current_balance: Money | null;
     savings: Money | null;
     budget_remaining: Money | null;
+    /** Metrics not computed yet -> phase that adds them. */
+    pending?: Record<string, number>;
   };
   tasks: Section & { today: TaskItem[]; pending: TaskItem[]; overdue: TaskItem[] };
   bills: Section & { upcoming: BillItem[]; overdue: BillItem[] };
@@ -53,6 +55,7 @@ export interface DashboardSummary {
     expense_categories: { category: string; amount: string }[];
     monthly_spending: MonthlyPoint[];
     savings: MonthlyPoint[];
+    pending?: Record<string, number>;
   };
 }
 

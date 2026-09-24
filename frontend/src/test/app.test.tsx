@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ALL_NAV_ITEMS } from "@/config/navigation";
+import { ALL_NAV_ITEMS, isLive } from "@/config/navigation";
 import { healthyBody, mockApi, renderApp } from "./utils";
 
 beforeEach(() => document.documentElement.classList.remove("dark"));
@@ -15,7 +15,7 @@ describe("routing (signed in)", () => {
     expect(router.state.location.pathname).toBe("/dashboard");
   });
 
-  it.each(ALL_NAV_ITEMS.filter((i) => i.path !== "/dashboard").map((i) => [i.path, i.title]))(
+  it.each(ALL_NAV_ITEMS.filter((i) => !isLive(i)).map((i) => [i.path, i.title]))(
     "renders the %s placeholder page",
     async (path, title) => {
       mockApi();

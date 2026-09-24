@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     cors_extra_origins: str = ""
 
     default_currency: str = "NPR"
+    # Currencies records may use. Only NPR for now; totals are computed per currency.
+    supported_currencies: list[str] = ["NPR"]
     # Defines "today" and month boundaries for dashboards and reports.
     app_timezone: str = "Asia/Kathmandu"
 

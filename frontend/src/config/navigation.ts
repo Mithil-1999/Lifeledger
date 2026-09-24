@@ -18,6 +18,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+/** Highest completed build phase; modules with phase <= this are live (not placeholders). */
+export const CURRENT_PHASE = 4;
+
+export function isLive(item: { phase: number }) {
+  return item.phase <= CURRENT_PHASE;
+}
+
 export interface NavItem {
   title: string;
   path: string;

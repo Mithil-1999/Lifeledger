@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user
-from app.api.routes import auth, dashboard, health
+from app.api.routes import auth, dashboard, finance, health
 
 api_router = APIRouter(prefix="/api")
 
@@ -13,5 +13,6 @@ api_router.include_router(auth.router)
 # Feature modules from later phases (finance, tasks, vault, ...) are included on this router.
 protected_router = APIRouter(dependencies=[Depends(get_current_user)])
 protected_router.include_router(dashboard.router)
+protected_router.include_router(finance.router)
 
 api_router.include_router(protected_router)

@@ -53,7 +53,36 @@ export const emptyDashboard = {
   },
 };
 
-type Reply ={ status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
+const category = (kind: "income" | "expense", name: string, is_system = true) => ({
+  id: `${kind}-${name.toLowerCase().replace(/\W+/g, "-")}`,
+  kind,
+  name,
+  slug: is_system ? name.toLowerCase() : null,
+  is_system,
+});
+
+export const incomeCategories = ["Allowance", "Business", "Freelance", "Gift", "Investment", "Salary", "Other"].map((n) =>
+  category("income", n),
+);
+export const expenseCategories = [
+  ...["Food", "Groceries", "Rent", "Other"].map((n) => category("expense", n)),
+  category("expense", "Pets", false),
+];
+
+export const emptyPage = { items: [], total_count: 0, total_amount: "0.00", currency: "NPR", page: 1, page_size: 20 };
+
+export const emptySummary = {
+  year: 2026,
+  currency: "NPR",
+  year_total: "0.00",
+  year_count: 0,
+  current_month: "2026-09",
+  current_month_total: "0.00",
+  months: Array.from({ length: 12 }, (_, i) => ({ month: `2026-${String(i + 1).padStart(2, "0")}`, total: "0.00", count: 0 })),
+  by_category: [],
+};
+
+type Reply = { status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
 type Handler = (init: RequestInit & { url: string }) => Reply;
 
 export interface MockApiOptions {
@@ -74,13 +103,22 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     // Only requested once signed in (the guard blocks it otherwise), e.g. right after register/login.
     "GET /api/dashboard/summary": { status: 200, body: emptyDashboard },
     "POST /api/auth/logout": { status: 204 },
+    "GET /api/categories": (init) => ({
+      status: 200,
+      body: init.url.includes("kind=income") ? incomeCategories : expenseCategories,
+    }),
+    "GET /api/incomes": { status: 200, body: emptyPage },
+    "GET /api/expenses": { status: 200, body: emptyPage },
+    "GET /api/incomes/summary": { status: 200, body: emptySummary },
+    "GET /api/expenses/summary": { status: 200, body: emptySummary },
     ...routes,
   };
 
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = typeof input === "string" ? input : input.toString();
     const method = (init.method ?? "GET").toUpperCase();
-    const entry = table[`${method} ${url}`];
+    // Exact "METHOD /path?query" match first, then the path without its query string.
+    const entry = table[`${method} ${url}`] ?? table[`${method} ${url.split("?")[0]}`];
     if (!entry) return new Response(JSON.stringify({ detail: "Not found" }), { status: 404, headers: { "content-type": "application/json" } });
     const reply = typeof entry === "function" ? entry({ ...init, url }) : entry;
     if (reply === "network-error") throw new TypeError("Failed to fetch");

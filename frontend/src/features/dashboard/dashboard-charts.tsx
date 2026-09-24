@@ -13,7 +13,9 @@ export function DashboardCharts({ summary, loading }: { summary?: DashboardSumma
   const emptyDescription =
     charts && !charts.available
       ? `Charts fill in automatically once you record income and expenses (Phase ${charts.available_from_phase}).`
-      : "Record some transactions to see this chart.";
+      : "Record income and expenses to see this chart.";
+  const savingsPhase = charts?.pending?.savings;
+  const savingsDescription = savingsPhase ? `Savings tracking arrives in Phase ${savingsPhase}.` : emptyDescription;
 
   const incomeVsExpenses = (charts?.income_vs_expenses ?? []).map((p) => ({
     month: p.month,
@@ -22,6 +24,7 @@ export function DashboardCharts({ summary, loading }: { summary?: DashboardSumma
   }));
   const categories = (charts?.expense_categories ?? []).map((p) => ({ category: p.category, amount: toNumber(p.amount) }));
   const spending = (charts?.monthly_spending ?? []).map((p) => ({ month: p.month, amount: toNumber(p.expenses) }));
+  // Amounts are converted to numbers only here, for plotting; all totals were computed exactly on the server.
   const savings = (charts?.savings ?? []).map((p) => ({ month: p.month, amount: toNumber(p.savings) }));
 
   return (
@@ -38,7 +41,7 @@ export function DashboardCharts({ summary, loading }: { summary?: DashboardSumma
       <ChartCard title="Monthly spending" description="Last 6 months" state={stateFor(spending.length)} emptyDescription={emptyDescription}>
         <MonthlySpendingChart data={spending} currency={currency} />
       </ChartCard>
-      <ChartCard title="Savings" description="Balance over time" state={stateFor(savings.length)} emptyDescription={emptyDescription}>
+      <ChartCard title="Savings" description="Balance over time" state={stateFor(savings.length)} emptyDescription={savingsDescription}>
         <SavingsChart data={savings} currency={currency} />
       </ChartCard>
     </section>

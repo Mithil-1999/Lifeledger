@@ -1,4 +1,4 @@
-﻿import { Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Tooltip, XAxis, YAxis } from "recharts";
 import { formatAmount, formatMonth } from "@/lib/format";
 import { CHART_HEIGHT, axisProps, moneyTick, moneyTooltip, tooltipStyle } from "./chart-utils";
 import { ChartDataTable } from "./chart-data-table";

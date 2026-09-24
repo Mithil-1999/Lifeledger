@@ -65,16 +65,30 @@ describe("authenticated dashboard", () => {
     const user = userEvent.setup();
     const { router } = renderApp("/dashboard");
 
-    for (const label of ["Add income", "Add expense", "Add task", "Add reminder", "Add bill"]) {
+    for (const label of ["Add income", "Add expense"]) {
+      expect(await screen.findByRole("link", { name: label })).toBeInTheDocument();
+    }
+    for (const label of ["Add task", "Add reminder", "Add bill"]) {
       expect(await screen.findByRole("button", { name: label })).toBeInTheDocument();
     }
-    await user.click(screen.getByRole("button", { name: "Add expense" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add expense: coming in Phase 4" });
+    await user.click(screen.getByRole("button", { name: "Add task" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add task: coming in Phase 6" });
     expect(within(dialog).getByText(/nothing can be saved here/)).toBeInTheDocument();
 
-    await user.click(within(dialog).getByRole("link", { name: "Open Expenses" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/expenses"));
+    await user.click(within(dialog).getByRole("link", { name: "Open Tasks" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/tasks"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Add expense opens the real expense form", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    const { router } = renderApp("/dashboard");
+    await user.click(await screen.findByRole("link", { name: "Add expense" }));
+    expect(await screen.findByRole("dialog", { name: "Add expense" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/expenses");
+    // The one-shot ?new=1 flag is removed so a reload doesn't reopen the form.
+    await waitFor(() => expect(router.state.location.search).toBe(""));
   });
 
   it("closes the quick action dialog with Escape", async () => {
@@ -140,6 +154,39 @@ describe("dashboard with real data (contract for later phases)", () => {
     expect(await screen.findByText("NPR 1,50,000.00")).toBeInTheDocument();
     expect(screen.getByText("NPR 48,250.50")).toBeInTheDocument();
     expect(screen.getByText("NPR 12,34,567.00")).toBeInTheDocument();
+  });
+
+  it("shows real figures with savings and budget marked as coming in Phase 5", async () => {
+    const money = (amount: string) => ({ amount, currency: "NPR" });
+    mockApi({
+      routes: {
+        "GET /api/dashboard/summary": {
+          status: 200,
+          body: {
+            ...emptyDashboard,
+            finance: {
+              available: true,
+              available_from_phase: null,
+              monthly_income: money("85000.00"),
+              monthly_expenses: money("15000.50"),
+              current_balance: money("-200.00"),
+              savings: null,
+              budget_remaining: null,
+              pending: { savings: 5, budget_remaining: 5 },
+            },
+            charts: { ...emptyDashboard.charts, available: true, available_from_phase: null, pending: { savings: 5 } },
+          },
+        },
+      },
+    });
+    renderApp("/dashboard");
+    const finance = await screen.findByRole("region", { name: "Financial summary" });
+    expect(await within(finance).findByText("NPR 85,000.00")).toBeInTheDocument();
+    expect(within(finance).getByText("-NPR 200.00")).toBeInTheDocument();
+    expect(within(finance).getAllByText("Arrives in Phase 5")).toHaveLength(2);
+    expect(within(finance).queryByText(/Figures appear once/)).not.toBeInTheDocument();
+    expect(await screen.findByText("Savings tracking arrives in Phase 5.")).toBeInTheDocument();
+    expect(screen.getAllByText("Record income and expenses to see this chart.")).toHaveLength(3);
   });
 });
 

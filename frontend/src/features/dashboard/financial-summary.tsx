@@ -4,6 +4,10 @@ import { StatCard } from "./stat-card";
 
 export function FinancialSummary({ finance, loading }: { finance?: DashboardSummary["finance"]; loading: boolean }) {
   const unavailable = finance && !finance.available;
+  const pendingHint = (metric: string) => {
+    const phase = finance?.pending?.[metric];
+    return phase ? `Arrives in Phase ${phase}` : undefined;
+  };
 
   return (
     <section aria-labelledby="finance-heading" className="grid grid-cols-1 gap-3">
@@ -21,9 +25,21 @@ export function FinancialSummary({ finance, loading }: { finance?: DashboardSumm
       <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Monthly income" icon={TrendingUp} tone="positive" value={finance?.monthly_income} loading={loading} />
         <StatCard label="Monthly expenses" icon={TrendingDown} tone="negative" value={finance?.monthly_expenses} loading={loading} />
-        <StatCard label="Current balance" icon={Wallet} value={finance?.current_balance} loading={loading} />
-        <StatCard label="Savings" icon={PiggyBank} value={finance?.savings} loading={loading} />
-        <StatCard label="Budget remaining" icon={ChartPie} value={finance?.budget_remaining} loading={loading} />
+        <StatCard
+          label="Current balance"
+          icon={Wallet}
+          tone={finance?.current_balance?.amount.startsWith("-") ? "negative" : "default"}
+          value={finance?.current_balance}
+          loading={loading}
+        />
+        <StatCard label="Savings" icon={PiggyBank} value={finance?.savings} loading={loading} emptyHint={pendingHint("savings")} />
+        <StatCard
+          label="Budget remaining"
+          icon={ChartPie}
+          value={finance?.budget_remaining}
+          loading={loading}
+          emptyHint={pendingHint("budget_remaining")}
+        />
       </div>
     </section>
   );

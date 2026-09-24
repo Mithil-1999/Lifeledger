@@ -1,5 +1,5 @@
-import { ModulePlaceholder } from "@/components/common/module-placeholder";
+import { LedgerPage } from "@/features/finance/ledger-page";
 
 export function IncomePage() {
-  return <ModulePlaceholder path="/income" />;
+  return <LedgerPage kind="income" />;
 }

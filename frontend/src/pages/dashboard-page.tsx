@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Link } from "react-router";
 import { AlertCircle, ArrowRight, RefreshCw } from "lucide-react";
-import { NAV_GROUPS } from "@/config/navigation";
+import { NAV_GROUPS, isLive } from "@/config/navigation";
 import { PageHeader } from "@/components/common/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -94,7 +94,7 @@ export function DashboardPage() {
                 >
                   <Icon className="size-4 shrink-0 text-primary" aria-hidden />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.title}</span>
-                  <span className="text-[11px] text-muted-foreground">Phase {item.phase}</span>
+                  {!isLive(item) && <span className="text-[11px] text-muted-foreground">Phase {item.phase}</span>}
                   <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
                 </Link>
               );

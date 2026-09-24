@@ -87,7 +87,11 @@ def _clean_state():
         from app.db.session import engine
 
         with engine.begin() as conn:
-            conn.execute(text("TRUNCATE users, user_sessions, password_reset_tokens RESTART IDENTITY CASCADE"))
+            # Not TRUNCATE ... CASCADE: that would also wipe the seeded built-in categories
+            # (categories references users). Row deletes cascade only to user-owned rows.
+            conn.execute(text("DELETE FROM incomes"))
+            conn.execute(text("DELETE FROM expenses"))
+            conn.execute(text("DELETE FROM users"))
 
 
 def make_client() -> TestClient:

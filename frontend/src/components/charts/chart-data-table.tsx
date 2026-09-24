@@ -1,4 +1,4 @@
-﻿/** Screen-reader equivalent of a chart (charts alone aren't accessible). */
+/** Screen-reader equivalent of a chart (charts alone aren't accessible). */
 export function ChartDataTable({
   caption,
   columns,

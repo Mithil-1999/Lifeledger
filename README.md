@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phase 3 (Dashboard).** You get the full-stack foundation, secure accounts, and an authenticated personal dashboard with a financial summary, tasks, bills, reminders, charts and quick actions. Until the finance, bills, task and reminder modules exist, the dashboard shows honest empty states, never made-up numbers. Those modules are built in the later phases listed below.
+> **Status: Phase 4 (Income & Expenses).** You get secure accounts, a personal dashboard, and full income and expense management: categories (including your own), search, filters, and monthly and yearly totals. The dashboard's income, expenses, balance and charts come from your real records. Savings, budgets, bills, tasks and reminders are built in the later phases listed below. Until then, their dashboard sections show empty states, never made-up numbers.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -204,9 +204,35 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 | POST   | `/api/auth/reset-password`  | –    | `{token, new_password, confirm_new_password}` (204) |
 | GET    | `/api/auth/me`              | ✔    | Current user |
 | GET    | `/api/dashboard/summary`    | ✔    | Everything the dashboard shows, scoped to the signed-in user (see below) |
+| GET    | `/api/categories?kind=`     | ✔    | Built-in categories plus your custom ones (`kind` = `income` or `expense`) |
+| POST   | `/api/categories`           | ✔    | Create a custom category `{kind, name}` (409 if the name exists) |
+| PATCH  | `/api/categories/{id}`      | ✔    | Rename a custom category (built-ins: 403) |
+| DELETE | `/api/categories/{id}`      | ✔    | Delete an unused custom category (409 if records use it) |
+| GET    | `/api/incomes`, `/api/expenses` | ✔ | List with `search`, `category_id`, `payment_method`, `date_from`, `date_to`, `is_recurring`, `min_amount`, `max_amount`, `sort`, `page`, `page_size`. Returns `{items, total_count, total_amount, currency, page, page_size}`, where `total_amount` sums **all** matches, not just the page |
+| POST   | `/api/incomes`, `/api/expenses` | ✔ | Create (201) |
+| GET / PUT / DELETE | `/api/incomes/{id}`, `/api/expenses/{id}` | ✔ | Read, replace, or delete one record (404 if it isn't yours) |
+| GET    | `/api/incomes/summary?year=`, `/api/expenses/summary?year=` | ✔ | Year total, the current month's total, 12 monthly totals, and totals by category |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
+
+## Income & expenses
+
+- **Record fields:** amount, date, category, payment method (cash, bank transfer, card, mobile wallet such as eSewa or Khalti, cheque, other), recurring plus how often (weekly, monthly, quarterly, yearly), description and notes. Income also has a **source**.
+- **Built-in categories:**
+  - *Income:* Salary, Freelance, Business, Allowance, Investment, Gift, Other.
+  - *Expenses:* Rent, Food, Groceries, Electricity, Water, Internet/Wi-Fi, Mobile, Transportation, Fuel, Education, Medical, Shopping, Clothing, Entertainment, Subscription, Travel, Family, Personal Care, Household, Loan Payment, Insurance, Other.
+  - *Custom categories* are private to each user. Built-ins can't be renamed or deleted, and a category in use can't be deleted.
+- **Money rules:**
+  - Amounts are stored as `NUMERIC(14,2)` and sent as strings (`"1250.50"`), with at most 2 decimal places and always greater than 0.
+  - Totals are computed by PostgreSQL `SUM()`. Neither the server nor the browser uses floating-point numbers for money; the Finance page's net figure is computed with integer cents.
+  - Each record has a currency. Only NPR is accepted for now (`supported_currencies` in settings).
+- **Recurring** records are only labelled for now. Automatically creating the next occurrence belongs to Phase 11 (automation).
+- **Pages:** Income, Expenses (with a category manager) and a Finance overview for the year. Filters are stored in the URL. There's a table on desktop and cards on phones, and deleting always asks for confirmation.
+- **Dashboard:**
+  - *Monthly income and expenses* cover the current month in `APP_TIMEZONE`.
+  - *Current balance* is all income minus all expenses dated up to today; future-dated records don't count yet.
+  - *Charts:* the last 6 months of income vs expenses, this month's expenses by category, and monthly spending.
 
 ## Dashboard
 
@@ -271,7 +297,7 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
 | 1     | Project foundation ✅                      |
 | 2     | Authentication ✅                          |
 | 3     | Dashboard ✅                               |
-| 4     | Income and expenses                        |
+| 4     | Income and expenses ✅                     |
 | 5     | Budget, bills, rent and savings            |
 | 6     | Tasks and reminders                        |
 | 7     | Secure password vault                      |

@@ -1,4 +1,4 @@
-﻿import { Cell, Pie, PieChart, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
 import { formatAmount } from "@/lib/format";
 import { CHART_COLORS, moneyTooltip, tooltipStyle } from "./chart-utils";
 import { ChartDataTable } from "./chart-data-table";
