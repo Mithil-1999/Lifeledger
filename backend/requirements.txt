@@ -7,6 +7,8 @@ alembic==1.20.0
 psycopg[binary]==3.3.6
 argon2-cffi==25.1.0
 email-validator==2.3.0
+# AES-256-GCM for the password vault.
+cryptography==50.0.1
 # multipart/form-data parsing for document uploads.
 python-multipart==0.0.32
 # IANA timezone database for zoneinfo (Windows has none built in).

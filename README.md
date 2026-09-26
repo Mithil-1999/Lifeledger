@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phases 1–6 and 8 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, plus **notes** (tags, categories, pin, archive) and **private document storage** (validated uploads, owner-only downloads). Phase 7 (Password Vault) hasn't been built yet, so it's still a placeholder.
+> **Status: Phases 1–8 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, and an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log). The remaining modules are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -30,20 +30,21 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
 │   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
 │   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders),
-│   │   │                        records (notes/documents)
+│   │   │                        records (notes/documents), vault
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
 │   │   ├── models/              user.py, finance.py (categories, incomes, expenses),
 │   │   │                        planning.py (budgets, bills, bill payments, savings goals),
-│   │   │                        productivity.py (tasks, reminders), records.py (notes, documents)
+│   │   │                        productivity.py (tasks, reminders), records.py (notes, documents),
+│   │   │                        vault.py (vault keys, entries, audit log)
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
 │   │   │                        budgets, bills, savings
 │   │   └── main.py              App factory: CORS, middleware, routers
 │   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
 │   │                            → 0004 budgets/bills/savings → 0005 tasks/reminders
-│   │                            → 0006 notes/documents
+│   │                            → 0006 notes/documents → 0007 password vault
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
 │   ├── Dockerfile
@@ -65,6 +66,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── features/planning/   Budgets, bills and savings API + constants
 │   │   ├── features/productivity/ Tasks and reminders API + constants
 │   │   ├── features/records/    Notes and documents API + constants
+│   │   ├── features/vault/      Vault API, secret field (reveal/copy/auto-hide), password generator
 │   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
@@ -103,6 +105,7 @@ Then edit `.env`:
 | `EMAIL_BACKEND`, `SMTP_*`, `EMAIL_FROM` | Email delivery for password resets (see below).           |
 | `RATE_LIMIT_ENABLED` / `TRUST_PROXY_HEADERS` | Rate limiting; only trust `X-Forwarded-For` behind your own proxy. |
 | `DOCUMENT_STORAGE_DIR` / `DOCUMENT_MAX_BYTES` / `DOCUMENT_QUOTA_BYTES` | Private file storage location, per-file size limit, and per-user quota. |
+| `VAULT_MASTER_KEY` / `VAULT_MASTER_KEY_VERSION` / `VAULT_UNLOCK_MINUTES` | Vault master key (env only, back it up separately; required in production), its version, and how long the vault stays unlocked. |
 
 `.env` is git-ignored. **Never commit real secrets.**
 
@@ -258,6 +261,17 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 | POST   | `/api/documents`            | ✔ | `multipart/form-data`: `file`, `category`, optional `title`, `description`, `document_date` |
 | GET / PUT / DELETE | `/api/documents/{id}` | ✔ | Read metadata, edit metadata, or delete (the file is removed from storage) |
 | GET    | `/api/documents/{id}/download?inline=` | ✔ | Download (owner only). `inline=true` works for PDFs and images only |
+| GET    | `/api/vault/status`         | ✔ | `{configured, unlocked, unlocked_until, unlock_minutes}` |
+| POST   | `/api/vault/unlock`         | ✔ | `{password}`: re-enter your account password (5 tries per 15 minutes) |
+| POST   | `/api/vault/lock`           | ✔ | Lock the vault now |
+| GET    | `/api/vault/entries?search=&category=&favorites=` | ✔🔓 | Entries **without passwords**, plus counts |
+| POST   | `/api/vault/entries`        | ✔🔓 | Create `{website, url, username, email, password, category, notes, is_favorite}` |
+| GET / PUT / DELETE | `/api/vault/entries/{id}` | ✔🔓 | Detail (includes notes, never the password), replace (`password: null` keeps it), or delete |
+| PATCH  | `/api/vault/entries/{id}/favorite` | ✔🔓 | `{is_favorite}` |
+| POST   | `/api/vault/entries/{id}/reveal` | ✔🔓 | `{purpose: reveal or copy}` returns **one** password. Audited, `no-store` |
+| GET    | `/api/vault/audit?limit=`   | ✔🔓 | Recent vault activity (never includes secrets) |
+
+🔓 = the vault must be unlocked for this session; otherwise the API returns `423 Locked`.
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
@@ -340,6 +354,48 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - Deleting a document removes the file from disk.
   - Stored files aren't encrypted at rest yet. Keep the storage folder on an encrypted disk, and back it up together with the database.
 
+## Password vault: security architecture
+
+**What's encrypted:** the username, email, password and notes of every entry. The site name, URL, category and favorite flag are stored in plaintext so you can list and filter.
+
+**Key management (envelope encryption):**
+
+```text
+VAULT_MASTER_KEY  (env var only: 32 random bytes, base64)
+      │  AES-256-GCM wraps ▼
+per-user data key (DEK, 32 random bytes)   → stored ONLY wrapped, in vault_keys.wrapped_key
+      │  AES-256-GCM encrypts ▼
+username / email / password / notes         → vault_entries.*_enc  (version ‖ nonce ‖ ciphertext ‖ tag)
+```
+
+- **The master key never touches the database, its backups, logs or API responses.** A leaked database alone gives an attacker no secrets.
+- **Each user's data key** is random (not derived from their password). It's unwrapped in memory only for the request that needs it.
+- **Every encryption uses a fresh random 96-bit nonce**, so saving the same password twice produces different ciphertexts.
+- **GCM associated data binds each ciphertext** to its user, entry and field (`lifevault:field:v1:<user>:<entry>:<field>`). A ciphertext moved to another row, field or user fails authentication instead of decrypting, and any tampering is detected.
+- **Unlocking:** the vault must be unlocked **per session** by re-entering your account password. It stays open for `VAULT_UNLOCK_MINUTES` (default 10), attempts are rate-limited, and logging out or letting the session expire ends it.
+- **Decrypt only when needed:** lists and details never contain passwords. `POST /reveal` decrypts **one** password per call, is written to the audit log, and is sent with `no-store`. No endpoint returns every password.
+- **Browser behaviour:**
+  - Passwords are hidden by default and revealed only on click.
+  - A revealed password hides itself after 20 seconds, when the tab goes to the background, or when you leave the page.
+  - Copy puts the password on the clipboard without showing it, then clears the clipboard after 30 seconds (if it still holds that password and the browser allows reading it).
+  - Revealed passwords are never kept in the query cache.
+- **Audit log:** entry created, updated or deleted; password revealed or copied; vault unlocked, lock failed, or locked. Each record has a time, IP and user agent, **never the secret**.
+- **Nothing is logged:** passwords arrive as `SecretStr`, validation errors never echo input, and request bodies aren't logged. Tests check that secrets never reach the logs.
+- **URLs** must be `http(s)`, so a stored link can't be a `javascript:` or `data:` payload.
+- **Password generator:** runs in the browser with `crypto.getRandomValues`, uses rejection sampling to avoid bias, guarantees every selected character type, and shuffles with a CSPRNG. A generated password never leaves the browser unless you save it.
+
+**Operating it:**
+
+- **Setup:** generate `VAULT_MASTER_KEY` once (see `.env.example`) and **back it up separately from the database**. Without it every vault entry is unrecoverable, and anyone who has it *and* the database can read the vault. If it's unset, the vault shows "not configured" and the rest of the app keeps working. Production refuses to start without it.
+- **Rotation:** wrapped keys record `kek_version`. Rotating means unwrapping each user's data key with the old master key and re-wrapping it with the new one. That re-wrap tool isn't built yet (only the version field exists), so rotation is currently a manual procedure.
+
+**Known limitations (honest):**
+
+- This isn't a zero-knowledge design. The server holds the master key, so anyone who controls the running server (or has both the database and the environment) can decrypt vault entries. A client-side, password-derived design would avoid that, at the cost of losing the vault if you forget your password.
+- Site names and URLs are plaintext, so a database leak reveals which services you use, but not your credentials.
+- Clearing the clipboard is best-effort; browsers may not allow reading it.
+- No application is perfectly secure. Run LifeVault over HTTPS, on a machine you trust, with disk encryption.
+
 ## Dashboard
 
 `GET /api/dashboard/summary` returns one payload with these sections: `finance` (monthly income, expenses, balance, savings, budget remaining), `tasks` (today, pending, overdue), `bills` (upcoming, overdue), `reminders` (upcoming) and `charts` (income vs expenses, expense categories, monthly spending, savings). It also returns the current `period`.
@@ -406,7 +462,7 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
 | 4     | Income and expenses ✅                     |
 | 5     | Budget, bills, rent and savings ✅         |
 | 6     | Tasks and reminders ✅                     |
-| 7     | Secure password vault                      |
+| 7     | Secure password vault ✅                   |
 | 8     | Notes and documents ✅                     |
 | 9     | Calendar                                   |
 | 10    | Reports and analytics                      |

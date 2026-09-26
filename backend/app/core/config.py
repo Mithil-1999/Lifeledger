@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -61,6 +61,32 @@ class Settings(BaseSettings):
     session_lifetime_hours: int = Field(default=12, ge=1)
     session_remember_me_days: int = Field(default=30, ge=1, le=90)
     password_reset_token_minutes: int = Field(default=30, ge=5, le=240)
+
+    # --- Password vault -----------------------------------------------------------------
+    # Master key-encryption key (32 random bytes, base64). Lives ONLY in the environment,
+    # never in the database. Losing it makes every vault entry unrecoverable.
+    # Generate: python -c "import secrets,base64;print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+    vault_master_key: SecretStr | None = None
+    # Identifies which master key wrapped each user's data key (for future rotation).
+    vault_master_key_version: int = Field(default=1, ge=1)
+    # How long the vault stays unlocked after re-entering your password.
+    vault_unlock_minutes: int = Field(default=10, ge=1, le=120)
+
+    @field_validator("vault_master_key")
+    @classmethod
+    def _valid_master_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None or not value.get_secret_value():
+            return None
+        import base64
+        import binascii
+
+        try:
+            raw = base64.urlsafe_b64decode(value.get_secret_value().encode())
+        except (binascii.Error, ValueError):
+            raise ValueError("VAULT_MASTER_KEY must be base64 (urlsafe) of 32 random bytes.") from None
+        if len(raw) != 32:
+            raise ValueError("VAULT_MASTER_KEY must decode to exactly 32 bytes (AES-256).")
+        return value
 
     # --- Documents ----------------------------------------------------------------------
     # Private storage for uploaded files. Must NOT be inside any web-served directory.
@@ -122,6 +148,8 @@ class Settings(BaseSettings):
                 raise ValueError("COOKIE_SECURE must be true in production (serve LifeVault over HTTPS).")
             if self.email_backend in ("dev_outbox", "memory"):
                 raise ValueError("EMAIL_BACKEND must be 'smtp' or 'disabled' in production.")
+            if self.vault_master_key is None:
+                raise ValueError("VAULT_MASTER_KEY must be set in production.")
         if self.email_backend == "smtp" and not (self.smtp_host and self.email_from):
             raise ValueError("EMAIL_BACKEND=smtp requires SMTP_HOST and EMAIL_FROM.")
         return self

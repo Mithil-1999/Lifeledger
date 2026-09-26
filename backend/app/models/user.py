@@ -64,6 +64,9 @@ class UserSession(UUIDPrimaryKeyMixin, Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     idle_timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Step-up authentication for the password vault: set when the user re-enters their
+    # password, per session (another device or a new login starts locked).
+    vault_unlocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     user_agent: Mapped[str | None] = mapped_column(String(255))
     ip_address: Mapped[str | None] = mapped_column(String(45))
 

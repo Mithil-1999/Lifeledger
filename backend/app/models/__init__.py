@@ -30,8 +30,14 @@ from app.models.productivity import (
 )
 from app.models.records import Document, DocumentCategory, Note, NoteCategory
 from app.models.user import PasswordResetToken, User, UserSession, UserStatus
+from app.models.vault import VaultAction, VaultAuditLog, VaultCategory, VaultEntry, VaultKey
 
 __all__ = [
+    "VaultAction",
+    "VaultAuditLog",
+    "VaultCategory",
+    "VaultEntry",
+    "VaultKey",
     "Document",
     "DocumentCategory",
     "Note",

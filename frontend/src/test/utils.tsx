@@ -155,6 +155,7 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/tasks": (init) => ({ status: 200, body: { ...emptyTaskList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "all" } }),
     "GET /api/tasks/pending": { status: 200, body: { due_soon_days: 3, overdue: [], due_soon: [], not_started: [] } },
     "GET /api/tasks/categories": { status: 200, body: [] },
+    "GET /api/vault/status": { status: 200, body: { configured: true, unlocked: false, unlocked_until: null, unlock_minutes: 10 } },
     "GET /api/notes": (init) => ({ status: 200, body: { ...emptyNoteList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "active" } }),
     "GET /api/notes/tags": { status: 200, body: [] },
     "GET /api/documents": { status: 200, body: emptyDocuments },

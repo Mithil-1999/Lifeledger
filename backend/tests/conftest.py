@@ -29,6 +29,11 @@ os.environ["COOKIE_SECURE"] = "false"
 import tempfile  # noqa: E402
 
 os.environ["DOCUMENT_STORAGE_DIR"] = tempfile.mkdtemp(prefix="lifevault-test-docs-")
+# A fresh random vault master key per test run (never a real key).
+import base64 as _b64  # noqa: E402
+import secrets as _secrets  # noqa: E402
+
+os.environ["VAULT_MASTER_KEY"] = _b64.urlsafe_b64encode(_secrets.token_bytes(32)).decode()
 
 from pathlib import Path  # noqa: E402
 
@@ -93,6 +98,9 @@ def _clean_state():
         with engine.begin() as conn:
             # Not TRUNCATE ... CASCADE: that would also wipe the seeded built-in categories
             # (categories references users). Row deletes cascade only to user-owned rows.
+            conn.execute(text("DELETE FROM vault_audit_log"))
+            conn.execute(text("DELETE FROM vault_entries"))
+            conn.execute(text("DELETE FROM vault_keys"))
             conn.execute(text("DELETE FROM notes"))
             conn.execute(text("DELETE FROM documents"))
             conn.execute(text("DELETE FROM incomes"))
