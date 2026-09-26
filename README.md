@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phase 6 (Tasks & Reminders).** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings goals, and now tasks (priorities, statuses, due dates, recurring tasks, and a “you haven’t worked on these” list) and reminders (one-time, daily, weekly, monthly, yearly, custom; with snooze and complete). Every dashboard section is driven by your real records. The remaining modules are built in the later phases listed below.
+> **Status: Phases 1–6 and 8 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, plus **notes** (tags, categories, pin, archive) and **private document storage** (validated uploads, owner-only downloads). Phase 7 (Password Vault) hasn't been built yet, so it's still a placeholder.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -29,19 +29,21 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   ├── router.py        Public routers + `protected_router` (auth required)
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
 │   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
-│   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders)
+│   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders),
+│   │   │                        records (notes/documents)
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
 │   │   ├── models/              user.py, finance.py (categories, incomes, expenses),
 │   │   │                        planning.py (budgets, bills, bill payments, savings goals),
-│   │   │                        productivity.py (tasks, reminders)
+│   │   │                        productivity.py (tasks, reminders), records.py (notes, documents)
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
 │   │   │                        budgets, bills, savings
 │   │   └── main.py              App factory: CORS, middleware, routers
 │   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
 │   │                            → 0004 budgets/bills/savings → 0005 tasks/reminders
+│   │                            → 0006 notes/documents
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
 │   ├── Dockerfile
@@ -62,6 +64,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── features/finance/    Income/expense API, forms, filters, table, category manager
 │   │   ├── features/planning/   Budgets, bills and savings API + constants
 │   │   ├── features/productivity/ Tasks and reminders API + constants
+│   │   ├── features/records/    Notes and documents API + constants
 │   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
@@ -99,6 +102,7 @@ Then edit `.env`:
 | `PASSWORD_RESET_TOKEN_MINUTES` | How long a reset link stays valid (default 30).                    |
 | `EMAIL_BACKEND`, `SMTP_*`, `EMAIL_FROM` | Email delivery for password resets (see below).           |
 | `RATE_LIMIT_ENABLED` / `TRUST_PROXY_HEADERS` | Rate limiting; only trust `X-Forwarded-For` behind your own proxy. |
+| `DOCUMENT_STORAGE_DIR` / `DOCUMENT_MAX_BYTES` / `DOCUMENT_QUOTA_BYTES` | Private file storage location, per-file size limit, and per-user quota. |
 
 `.env` is git-ignored. **Never commit real secrets.**
 
@@ -245,6 +249,15 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 | GET / PUT / DELETE | `/api/reminders/{id}` | ✔ | Read, replace (which reactivates it and clears any snooze), or delete |
 | POST   | `/api/reminders/{id}/snooze` | ✔ | `{minutes}` or `{until}` |
 | POST   | `/api/reminders/{id}/complete` | ✔ | One-time reminders become completed; repeating ones move to the next occurrence |
+| GET    | `/api/notes?view=&search=&category=&tag=` | ✔ | `view` is active, archived or all. Pinned notes come first; the response includes counts |
+| GET    | `/api/notes/tags`           | ✔ | Tags on your active notes, with counts |
+| POST   | `/api/notes`                | ✔ | `{title, content, category, tags, is_pinned, is_archived}` |
+| GET / PUT / DELETE | `/api/notes/{id}` | ✔ | Read, replace, or delete one note |
+| PATCH  | `/api/notes/{id}`           | ✔ | `{is_pinned?, is_archived?}` (archiving unpins) |
+| GET    | `/api/documents?search=&category=&file_kind=&date_from=&date_to=&sort=` | ✔ | Metadata, plus storage used, quota, size limit and allowed file types |
+| POST   | `/api/documents`            | ✔ | `multipart/form-data`: `file`, `category`, optional `title`, `description`, `document_date` |
+| GET / PUT / DELETE | `/api/documents/{id}` | ✔ | Read metadata, edit metadata, or delete (the file is removed from storage) |
+| GET    | `/api/documents/{id}/download?inline=` | ✔ | Download (owner only). `inline=true` works for PDFs and images only |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
@@ -307,6 +320,25 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - *Tasks:* Today, Not started (excluding overdue) and Overdue, with full counts.
   - *Reminders:* due and upcoming reminders.
   - *Quick actions:* all five open the real “add” forms.
+
+## Notes & documents
+
+- **Notes:** title, plain-text content, category (Personal, Work, Education, Finance, Ideas, Important, Other), up to 20 tags, pin and archive.
+  - Search covers the title, content and tags; you can also filter by category or tag.
+  - Content is stored and shown **as plain text** (never rendered as HTML), so pasted markup can't run.
+  - Tags are normalised: lower-case, with `#` and extra spaces removed.
+- **Documents:** title, category, description, date and the file itself. You can upload, view metadata, edit details, download, delete, search, and filter by category, file type or date.
+- **Upload validation:**
+  - *Allowed types:* only an allowlist, **identified from the file's bytes**, not its name or the type the browser sends: PDF, PNG, JPEG, WebP, TXT, CSV, DOCX and XLSX. The extension must also match the contents.
+  - *Refused:* SVG and HTML (they can carry scripts), executables, Office files with macros, and empty files.
+  - *Size and quota:* files over `DOCUMENT_MAX_BYTES` (default 10 MB) are refused **before the upload is read**, based on `Content-Length`, and checked again while reading. Each user also has a storage quota, `DOCUMENT_QUOTA_BYTES` (default 1 GB).
+  - *Filenames:* cleaned (no paths or control characters; Nepali and other scripts are kept) and used only for the download name.
+- **Storage:** files are saved under `DOCUMENT_STORAGE_DIR` (default `backend/var/documents/`, git-ignored) at `<user id>/<random name>`. No part of the path comes from you, the folder is **outside any web-served directory**, and writes are atomic.
+  - Files are only reachable through the API, which checks the owner on every request; anyone else gets `404`.
+  - Downloads are sent as attachments with `Cache-Control: private, no-store` and `nosniff`.
+  - Inline viewing is limited to PDFs and images. Images are served inside a CSP `sandbox`; PDFs get a locked-down CSP.
+  - Deleting a document removes the file from disk.
+  - Stored files aren't encrypted at rest yet. Keep the storage folder on an encrypted disk, and back it up together with the database.
 
 ## Dashboard
 
@@ -375,7 +407,7 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
 | 5     | Budget, bills, rent and savings ✅         |
 | 6     | Tasks and reminders ✅                     |
 | 7     | Secure password vault                      |
-| 8     | Notes and documents                        |
+| 8     | Notes and documents ✅                     |
 | 9     | Calendar                                   |
 | 10    | Reports and analytics                      |
 | 11    | Notifications and automation               |

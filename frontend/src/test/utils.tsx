@@ -109,6 +109,17 @@ export const emptyTaskList = { view: "all", items: [], counts: { today: 0, upcom
 
 export const emptyReminderList = { view: "all", items: [], counts: { due: 0, upcoming: 0, completed: 0, all: 0 } };
 
+export const emptyNoteList = { view: "active", items: [], counts: { active: 0, archived: 0, pinned: 0 } };
+
+export const emptyDocuments = {
+  items: [],
+  total_count: 0,
+  used_bytes: 0,
+  quota_bytes: 1024 * 1024 * 1024,
+  max_file_bytes: 10 * 1024 * 1024,
+  allowed_extensions: [".csv", ".docx", ".jpeg", ".jpg", ".pdf", ".png", ".txt", ".webp", ".xlsx"],
+};
+
 type Reply = { status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
 type Handler = (init: RequestInit & { url: string }) => Reply;
 
@@ -144,6 +155,9 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/tasks": (init) => ({ status: 200, body: { ...emptyTaskList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "all" } }),
     "GET /api/tasks/pending": { status: 200, body: { due_soon_days: 3, overdue: [], due_soon: [], not_started: [] } },
     "GET /api/tasks/categories": { status: 200, body: [] },
+    "GET /api/notes": (init) => ({ status: 200, body: { ...emptyNoteList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "active" } }),
+    "GET /api/notes/tags": { status: 200, body: [] },
+    "GET /api/documents": { status: 200, body: emptyDocuments },
     "GET /api/reminders": (init) => ({ status: 200, body: { ...emptyReminderList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "all" } }),
     ...routes,
   };

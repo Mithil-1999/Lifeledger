@@ -28,9 +28,14 @@ from app.models.productivity import (
     TaskRecurrence,
     TaskStatus,
 )
+from app.models.records import Document, DocumentCategory, Note, NoteCategory
 from app.models.user import PasswordResetToken, User, UserSession, UserStatus
 
 __all__ = [
+    "Document",
+    "DocumentCategory",
+    "Note",
+    "NoteCategory",
     "OPEN_TASK_STATUSES",
     "PRIORITY_RANK",
     "IntervalUnit",

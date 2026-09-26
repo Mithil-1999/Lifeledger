@@ -25,6 +25,10 @@ os.environ["EMAIL_BACKEND"] = "memory"
 os.environ["REGISTRATION_ENABLED"] = "true"
 os.environ["RATE_LIMIT_ENABLED"] = "true"
 os.environ["COOKIE_SECURE"] = "false"
+# Uploaded test documents go to a throwaway directory, never the real storage.
+import tempfile  # noqa: E402
+
+os.environ["DOCUMENT_STORAGE_DIR"] = tempfile.mkdtemp(prefix="lifevault-test-docs-")
 
 from pathlib import Path  # noqa: E402
 
@@ -89,6 +93,8 @@ def _clean_state():
         with engine.begin() as conn:
             # Not TRUNCATE ... CASCADE: that would also wipe the seeded built-in categories
             # (categories references users). Row deletes cascade only to user-owned rows.
+            conn.execute(text("DELETE FROM notes"))
+            conn.execute(text("DELETE FROM documents"))
             conn.execute(text("DELETE FROM incomes"))
             conn.execute(text("DELETE FROM expenses"))
             conn.execute(text("DELETE FROM users"))

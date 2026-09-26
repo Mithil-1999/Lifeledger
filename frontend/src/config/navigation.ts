@@ -18,11 +18,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-/** Highest completed build phase; modules with phase <= this are live (not placeholders). */
-export const CURRENT_PHASE = 6;
+/** Build phases that are finished. Phases can land out of order (8 was built before 7),
+ * so "live" is an explicit set rather than "phase <= N". */
+export const COMPLETED_PHASES: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6, 8]);
 
 export function isLive(item: { phase: number | null }) {
-  return item.phase !== null && item.phase <= CURRENT_PHASE;
+  return item.phase !== null && COMPLETED_PHASES.has(item.phase);
 }
 
 export interface NavItem {

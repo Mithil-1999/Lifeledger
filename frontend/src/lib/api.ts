@@ -61,14 +61,16 @@ async function send(path: string, options: ApiRequestOptions, retryOnCsrf: boole
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (body !== undefined) headers.set("Content-Type", "application/json");
+  // FormData (file uploads) is sent as-is so the browser sets the multipart boundary.
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  if (body !== undefined && !isForm) headers.set("Content-Type", "application/json");
   if (!SAFE_METHODS.has(method)) headers.set(CSRF_HEADER, await getCsrfToken());
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
     credentials: "include",
   });
 

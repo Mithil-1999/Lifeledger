@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.core.csrf import CSRFMiddleware
 from app.core.errors import register_exception_handlers
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.upload_limit import UploadSizeLimitMiddleware
 
 
 def create_app() -> FastAPI:
@@ -25,7 +26,8 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
-    # Middleware added last runs first: CORS -> security headers -> CSRF -> routes.
+    # Middleware added last runs first: CORS -> security headers -> CSRF -> upload size limit -> routes.
+    app.add_middleware(UploadSizeLimitMiddleware)
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(

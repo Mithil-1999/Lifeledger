@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     session_remember_me_days: int = Field(default=30, ge=1, le=90)
     password_reset_token_minutes: int = Field(default=30, ge=5, le=240)
 
+    # --- Documents ----------------------------------------------------------------------
+    # Private storage for uploaded files. Must NOT be inside any web-served directory.
+    document_storage_dir: Path = BACKEND_DIR / "var" / "documents"
+    document_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)  # per file
+    document_quota_bytes: int = Field(default=1024 * 1024 * 1024, ge=1024 * 1024)  # per user
+
     # --- Rate limiting ----------------------------------------------------------------
     rate_limit_enabled: bool = True
     # Only enable behind a trusted reverse proxy that sets X-Forwarded-For.
