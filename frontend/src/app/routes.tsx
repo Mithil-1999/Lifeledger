@@ -18,6 +18,7 @@ import { FinancePage } from "@/pages/finance-page";
 import { IncomePage } from "@/pages/income-page";
 import { NotFoundPage } from "@/pages/not-found-page";
 import { NotesPage } from "@/pages/notes-page";
+import { NotificationsPage } from "@/pages/notifications-page";
 import { RemindersPage } from "@/pages/reminders-page";
 import { ReportsPage } from "@/pages/reports-page";
 import { RouteErrorPage } from "@/pages/route-error-page";
@@ -71,6 +72,7 @@ export const routes: RouteObject[] = [
           { path: "notes", element: <NotesPage /> },
           { path: "documents", element: <DocumentsPage /> },
           { path: "reports", element: <ReportsPage /> },
+          { path: "notifications", element: <NotificationsPage /> },
           { path: "settings", element: <SettingsPage /> },
           { path: "settings/password", element: <ChangePasswordPage /> },
           { path: "*", element: <NotFoundPage /> },

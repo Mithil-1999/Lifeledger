@@ -120,6 +120,20 @@ export const emptyDocuments = {
   allowed_extensions: [".csv", ".docx", ".jpeg", ".jpg", ".pdf", ".png", ".txt", ".webp", ".xlsx"],
 };
 
+export const defaultNotificationPreferences = {
+  task_overdue: true,
+  task_upcoming: true,
+  bill_overdue: true,
+  bill_upcoming: true,
+  budget_threshold: true,
+  savings_milestone: true,
+  reminder_due: true,
+  task_lead_days: 1,
+  bill_lead_days: 3,
+  browser_enabled: false,
+  updated_at: "2026-09-24T00:00:00Z",
+};
+
 type Reply = { status: number; body?: unknown; headers?: Record<string, string> } | "network-error";
 type Handler = (init: RequestInit & { url: string }) => Reply;
 
@@ -159,6 +173,10 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/notes": (init) => ({ status: 200, body: { ...emptyNoteList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "active" } }),
     "GET /api/notes/tags": { status: 200, body: [] },
     "GET /api/documents": { status: 200, body: emptyDocuments },
+    // The notification bell in the top bar loads these on every signed-in page.
+    "GET /api/notifications": { status: 200, body: { items: [], total: 0, unread_count: 0 } },
+    "POST /api/notifications/check": { status: 200, body: { created: 0, unread_count: 0 } },
+    "GET /api/notifications/preferences": { status: 200, body: defaultNotificationPreferences },
     "GET /api/calendar": (init) => {
       const params = new URL(init.url, "http://x").searchParams;
       return { status: 200, body: { start: params.get("start"), end: params.get("end"), today: "2026-09-24", items: [], counts: {} } };

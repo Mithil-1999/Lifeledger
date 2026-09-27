@@ -94,6 +94,14 @@ class Settings(BaseSettings):
     document_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)  # per file
     document_quota_bytes: int = Field(default=1024 * 1024 * 1024, ge=1024 * 1024)  # per user
 
+    # --- Notifications / background jobs ---------------------------------------------
+    # Run the recurring notification checks inside the API process. Turn off when an
+    # external scheduler (cron, systemd timer) runs `python -m app.jobs.notifications` instead.
+    notification_scheduler_enabled: bool = True
+    notification_check_interval_seconds: int = Field(default=300, ge=30, le=86400)
+    # Read notifications older than this are deleted by the job (unread ones are kept).
+    notification_retention_days: int = Field(default=90, ge=7, le=3650)
+
     # --- Rate limiting ----------------------------------------------------------------
     rate_limit_enabled: bool = True
     # Only enable behind a trusted reverse proxy that sets X-Forwarded-For.

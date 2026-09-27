@@ -1,3 +1,7 @@
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +12,20 @@ from app.core.csrf import CSRFMiddleware
 from app.core.errors import register_exception_handlers
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.upload_limit import UploadSizeLimitMiddleware
+from app.jobs.notifications import start_scheduler
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # Recurring notification checks (disabled with NOTIFICATION_SCHEDULER_ENABLED=false).
+    task = start_scheduler()
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 def create_app() -> FastAPI:
@@ -22,6 +40,7 @@ def create_app() -> FastAPI:
         docs_url=None if is_production else "/api/docs",
         redoc_url=None if is_production else "/api/redoc",
         openapi_url=None if is_production else "/api/openapi.json",
+        lifespan=lifespan,
     )
 
     register_exception_handlers(app)

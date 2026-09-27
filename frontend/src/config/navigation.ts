@@ -209,6 +209,7 @@ export function findNavItem(path: string): NavItem | undefined {
 /** Titles for app pages that aren't top-level navigation items. */
 const EXTRA_PAGE_TITLES: Record<string, string> = {
   "/settings/password": "Change password",
+  "/notifications": "Notifications",
 };
 
 export function pageTitle(path: string): string {

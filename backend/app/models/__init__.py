@@ -29,11 +29,18 @@ from app.models.productivity import (
     TaskRecurrence,
     TaskStatus,
 )
+from app.models.notifications import JobRun, JobStatus, Notification, NotificationPreferences, NotificationType, RelatedType
 from app.models.records import Document, DocumentCategory, Note, NoteCategory
 from app.models.user import PasswordResetToken, User, UserSession, UserStatus
 from app.models.vault import VaultAction, VaultAuditLog, VaultCategory, VaultEntry, VaultKey
 
 __all__ = [
+    "JobRun",
+    "JobStatus",
+    "Notification",
+    "NotificationPreferences",
+    "NotificationType",
+    "RelatedType",
     "EVENT_REMINDER_MINUTES",
     "CalendarEvent",
     "EventCategory",

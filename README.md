@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phases 1–10 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log), a **personal calendar** that shows your events alongside tasks, reminders, bills and savings deadlines, and **financial reports** (monthly finance, expenses, budget, savings and bills) with charts and CSV export. The remaining modules are built in the later phases listed below.
+> **Status: Phases 1–11 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log), a **personal calendar** that shows your events alongside tasks, reminders, bills and savings deadlines, **financial reports** (monthly finance, expenses, budget, savings and bills) with charts and CSV export, and **notifications** (a notification center, preferences, browser notifications, and a background job for the recurring checks). The remaining modules are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -30,7 +30,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
 │   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
 │   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders),
-│   │   │                        records (notes/documents), vault, calendar, reports
+│   │   │                        records (notes/documents), vault, calendar, reports, notifications
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
@@ -38,15 +38,17 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │                        planning.py (budgets, bills, bill payments, savings goals),
 │   │   │                        productivity.py (tasks, reminders), records.py (notes, documents),
 │   │   │                        vault.py (vault keys, entries, audit log), calendar.py (events)
+│   │   │                        notifications.py (notifications, preferences, job runs)
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
 │   │   │                        budgets, bills, savings, tasks, reminders, notes, documents,
-│   │   │                        vault, calendar, reports
-│   │   └── main.py              App factory: CORS, middleware, routers
+│   │   │                        vault, calendar, reports, notifications
+│   │   ├── jobs/                Background jobs: notification checks (scheduler + CLI)
+│   │   └── main.py              App factory: CORS, middleware, routers, scheduler lifespan
 │   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
 │   │                            → 0004 budgets/bills/savings → 0005 tasks/reminders
 │   │                            → 0006 notes/documents → 0007 password vault
-│   │                            → 0008 calendar events
+│   │                            → 0008 calendar events → 0009 notifications
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
 │   ├── Dockerfile
@@ -71,6 +73,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── features/vault/      Vault API, secret field (reveal/copy/auto-hide), password generator
 │   │   ├── features/calendar/   Calendar API, date maths, month/week/day/agenda views, event form
 │   │   ├── features/reports/    Report API, filters, report sections (figures, charts, tables)
+│   │   ├── features/notifications/ Notification API, bell, browser notifications
 │   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
@@ -109,6 +112,7 @@ Then edit `.env`:
 | `EMAIL_BACKEND`, `SMTP_*`, `EMAIL_FROM` | Email delivery for password resets (see below).           |
 | `RATE_LIMIT_ENABLED` / `TRUST_PROXY_HEADERS` | Rate limiting; only trust `X-Forwarded-For` behind your own proxy. |
 | `DOCUMENT_STORAGE_DIR` / `DOCUMENT_MAX_BYTES` / `DOCUMENT_QUOTA_BYTES` | Private file storage location, per-file size limit, and per-user quota. |
+| `NOTIFICATION_SCHEDULER_ENABLED` / `NOTIFICATION_CHECK_INTERVAL_SECONDS` / `NOTIFICATION_RETENTION_DAYS` | Run the notification checks inside the API (default every 300 s; set to false when using cron), and how long read notifications are kept. |
 | `VAULT_MASTER_KEY` / `VAULT_MASTER_KEY_VERSION` / `VAULT_UNLOCK_MINUTES` | Vault master key (env only, back it up separately; required in production), its version, and how long the vault stays unlocked. |
 
 `.env` is git-ignored. **Never commit real secrets.**
@@ -295,6 +299,18 @@ Reports (read-only). Every report takes a period: `month=YYYY-MM`, `year=YYYY`, 
 | GET    | `/api/reports/savings`      | ✔ | Deposits and withdrawals per month, savings trend, goal progress |
 | GET    | `/api/reports/bills?category=` | ✔ | Paid (from payment history), pending, overdue, and recurring totals |
 | GET    | `/api/reports/{report}/export.csv` | ✔ | CSV download of the main table for that report (same filters) |
+
+Notifications:
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET    | `/api/notifications?status=all\|unread&type=&limit=&offset=` | ✔ | Newest first, plus `total` and `unread_count` |
+| GET    | `/api/notifications/unread-count` | ✔ | `{unread_count}` |
+| PATCH  | `/api/notifications/{id}`   | ✔ | `{read: true\|false}` |
+| DELETE | `/api/notifications/{id}`   | ✔ | Delete (hide) one notification. The same event won't notify again |
+| POST   | `/api/notifications/read-all` · `/dismiss-read` | ✔ | Mark all as read · delete all read ones |
+| POST   | `/api/notifications/check`  | ✔ | Run the checks for yourself now (6 per minute) |
+| GET / PUT | `/api/notifications/preferences` | ✔ | Per-type switches, lead days for tasks and bills, browser notifications |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
@@ -357,6 +373,39 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - *Tasks:* Today, Not started (excluding overdue) and Overdue, with full counts.
   - *Reminders:* due and upcoming reminders.
   - *Quick actions:* all five open the real “add” forms.
+
+## Notifications & automation
+
+- **What you're notified about:**
+  - *Tasks:* overdue tasks, and upcoming tasks (due within your chosen lead time, 0–14 days).
+  - *Bills:* overdue bills, and upcoming bills (0–30 days ahead).
+  - *Budgets:* when a budget reaches its warning level, and again if it goes over.
+  - *Savings:* when a goal reaches 25%, 50%, 75% or 100%. Only the highest milestone reached is announced, so a big deposit doesn't send three at once.
+  - *Reminders:* when a reminder's time arrives.
+  - The checks use the same rules as the rest of the app (stored status, `APP_TIMEZONE`), so a notification always matches what the module shows.
+- **Notification center:**
+  - *Bell:* the bell in the top bar shows the unread count and your latest notifications. Clicking one marks it read and opens its module.
+  - *Page:* the **Notifications** page lists everything (all or unread, filtered by type). You can mark items read or unread, mark all as read, delete one, or delete all read ones.
+  - *Contents:* each notification has a title, message, type, created time, read state, and its related record (type and id).
+- **Preferences:** turn each type on or off, choose how many days ahead "upcoming" starts for tasks and bills, and enable browser notifications.
+- **Browser notifications:**
+  - *When they appear:* while LifeVault is open, new notifications also appear as system notifications. This needs your browser's permission, asked only when you switch it on.
+  - *Where they're unavailable:* on browsers without the Notification API, such as iOS Safari tabs, the in-app center still works.
+  - *No repeats:* notifications that existed when you opened the app aren't shown again. Each has a unique tag, so two open tabs don't show it twice.
+- **No duplicates:**
+  - *How:* each notification has an event key, such as `bill_upcoming:<bill>:<due date>`. A unique index with `INSERT … ON CONFLICT DO NOTHING` means checks can run any number of times, even in parallel, and each event is still created only once.
+  - *Recurring items:* a recurring bill's next due date, a reminder's next occurrence or snooze, and a recurring task's next copy are new events, so each cycle notifies once.
+  - *Deleting* hides a notification but keeps its key, so it doesn't come back.
+- **Background job architecture:**
+  - *Where it runs:* the checks run every `NOTIFICATION_CHECK_INTERVAL_SECONDS` in a worker thread inside the API. To use cron or a systemd timer instead, set `NOTIFICATION_SCHEDULER_ENABLED=false` and run `python -m app.jobs.notifications`. The app also runs a quick check for you when it opens.
+  - *One run at a time:* a **PostgreSQL advisory lock** allows only one run across all workers and replicas. A second run is recorded as *skipped*.
+  - *Isolated failures:* each user is checked in their own transaction, so one failure doesn't stop the others.
+  - *Run log:* every run is written to `job_runs` with counts and an error class name only, never user data.
+  - *Clean-up:* read or deleted notifications older than `NOTIFICATION_RETENTION_DAYS` are removed. Unread ones are kept.
+- **Limits:**
+  - Notifications are delivered only in the app and the browser; there's no email or push when the app is closed.
+  - Budget alerts cover the current month.
+  - After the retention period, a condition that's still true (for example, a bill overdue for months) may notify once more.
 
 ## Reports & analytics
 
@@ -527,5 +576,5 @@ username / email / password / notes         → vault_entries.*_enc  (version �
 | 8     | Notes and documents ✅                     |
 | 9     | Calendar ✅                                |
 | 10    | Reports and analytics ✅                   |
-| 11    | Notifications and automation               |
+| 11    | Notifications and automation ✅            |
 | 12    | Settings, security audit and production    |

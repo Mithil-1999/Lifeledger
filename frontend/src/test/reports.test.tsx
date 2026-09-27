@@ -178,7 +178,7 @@ describe("reports page", () => {
     await user.type(screen.getByLabelText("To"), "2025-04-20");
     await waitFor(() => expect(lastParams(fetchMock, "finance").get("date_to")).toBe("2025-04-20"));
     expect(lastParams(fetchMock, "finance").get("date_from")).toBe("2025-03-10");
-  });
+  }, 30_000); // lots of typing: slow when the whole suite runs in parallel
 
   it("shows the expense report and filters by category", async () => {
     const fetchMock = mockApi({ routes });

@@ -1,6 +1,7 @@
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { NotificationBell } from "@/features/notifications/notification-bell";
 import { ApiStatusIndicator } from "@/features/system/api-status-indicator";
 import { Brand } from "./brand";
 import { UserMenu } from "./user-menu";
@@ -23,6 +24,7 @@ export function Topbar({ title, onOpenMenu }: TopbarProps) {
       <div className="ml-auto flex items-center gap-1">
         <ApiStatusIndicator />
         <ThemeToggle />
+        <NotificationBell />
         <UserMenu />
       </div>
     </header>
