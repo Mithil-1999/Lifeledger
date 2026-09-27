@@ -20,7 +20,7 @@ import {
 
 /** Build phases that are finished. Phases can land out of order (8 was built before 7),
  * so "live" is an explicit set rather than "phase <= N". */
-export const COMPLETED_PHASES: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+export const COMPLETED_PHASES: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
 export function isLive(item: { phase: number | null }) {
   return item.phase !== null && COMPLETED_PHASES.has(item.phase);
@@ -185,7 +185,7 @@ export const NAV_GROUPS: NavGroup[] = [
         icon: ChartColumn,
         description: "Financial reports and analytics.",
         phase: 10,
-        planned: ["Monthly and yearly reports", "Spending trends", "Export to CSV"],
+        planned: ["Monthly, yearly and custom-period reports", "Spending, budget, savings and bill analytics", "Export to CSV"],
       },
     ],
   },

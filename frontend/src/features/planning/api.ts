@@ -147,10 +147,10 @@ export const useContributions = (goalId: string | null) =>
 
 // --- Mutations -------------------------------------------------------------------------------------
 
-/** Refresh the module plus everything derived from it (dashboard, calendar; expenses for bill payments). */
+/** Refresh the module plus everything derived from it (dashboard, calendar, reports; expenses for bill payments). */
 function useInvalidate(keys: string[][]) {
   const queryClient = useQueryClient();
-  return () => Promise.all([...keys, ["dashboard"], ["calendar"]].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+  return () => Promise.all([...keys, ["dashboard"], ["calendar"], ["reports"]].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
 }
 
 export function useBudgetMutations() {

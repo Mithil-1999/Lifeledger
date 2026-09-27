@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phases 1–9 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log), and a **personal calendar** that shows your events alongside tasks, reminders, bills and savings deadlines. The remaining modules are built in the later phases listed below.
+> **Status: Phases 1–10 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log), a **personal calendar** that shows your events alongside tasks, reminders, bills and savings deadlines, and **financial reports** (monthly finance, expenses, budget, savings and bills) with charts and CSV export. The remaining modules are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -30,7 +30,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
 │   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
 │   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders),
-│   │   │                        records (notes/documents), vault, calendar
+│   │   │                        records (notes/documents), vault, calendar, reports
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
@@ -41,7 +41,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
 │   │   │                        budgets, bills, savings, tasks, reminders, notes, documents,
-│   │   │                        vault, calendar
+│   │   │                        vault, calendar, reports
 │   │   └── main.py              App factory: CORS, middleware, routers
 │   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
 │   │                            → 0004 budgets/bills/savings → 0005 tasks/reminders
@@ -70,6 +70,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── features/records/    Notes and documents API + constants
 │   │   ├── features/vault/      Vault API, secret field (reveal/copy/auto-hide), password generator
 │   │   ├── features/calendar/   Calendar API, date maths, month/week/day/agenda views, event form
+│   │   ├── features/reports/    Report API, filters, report sections (figures, charts, tables)
 │   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
@@ -283,6 +284,17 @@ Calendar:
 | GET    | `/api/calendar?start=&end=&search=&sources=&category=` | ✔ | Everything between two dates (inclusive, at most 366 days). `sources` is a comma list of `event,task,reminder,bill,goal` (default: all); `category` filters events |
 | POST   | `/api/calendar/events`      | ✔ | Create `{title, start_date, end_date?, start_time?, end_time?, event_type, category, recurrence?, reminder_minutes?, location?, description?}` (no start time = all day) |
 | GET / PUT / DELETE | `/api/calendar/events/{id}` | ✔ | Read, replace, or delete an event (deleting also deletes its reminder) |
+
+Reports (read-only). Every report takes a period: `month=YYYY-MM`, `year=YYYY`, or `date_from=&date_to=` (up to 5 years). Custom dates win over a month, and a month wins over a year. With none, the current month is used.
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET    | `/api/reports/finance`      | ✔ | Income, expenses, net, savings rate, money added to savings goals, and closing balance, with a month-by-month table |
+| GET    | `/api/reports/expenses?category_id=` | ✔ | Category breakdown with share and change vs. the previous period, largest expenses, recurring expenses, monthly comparison |
+| GET    | `/api/reports/budget?category_id=` | ✔ | Budget vs. actual per category and per month: remaining and percentage used |
+| GET    | `/api/reports/savings`      | ✔ | Deposits and withdrawals per month, savings trend, goal progress |
+| GET    | `/api/reports/bills?category=` | ✔ | Paid (from payment history), pending, overdue, and recurring totals |
+| GET    | `/api/reports/{report}/export.csv` | ✔ | CSV download of the main table for that report (same filters) |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
@@ -345,6 +357,25 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - *Tasks:* Today, Not started (excluding overdue) and Overdue, with full counts.
   - *Reminders:* due and upcoming reminders.
   - *Quick actions:* all five open the real “add” forms.
+
+## Reports & analytics
+
+- **Five reports:** Monthly finance, Expenses, Budget, Savings and Bills, each with headline figures, Recharts charts and tables. Filters: **month, year or custom dates**, plus **category** (expense categories on Expenses and Budget, bill categories on Bills). The report, period and filters are kept in the URL.
+- **Built only from your records.** Totals are computed by PostgreSQL over exact `NUMERIC` values and sent as decimal strings. They match the dashboard, ledger and budget screens because they use the same queries.
+- **Rules that keep the numbers honest:**
+  - A number that can't be computed is shown as **“—”**, never as a made-up 0. This covers a savings rate with no income, a percentage change from zero, a share of zero spending, and a balance for a month that hasn't started.
+  - **Balance** is all income minus all expenses up to the end of the period, or today if that's earlier. Entries dated in the future are never counted.
+  - **Savings rate** is (income − expenses) ÷ income.
+  - **“Added to savings”** is deposits minus withdrawals in your savings goals' history. It includes starting balances entered when a goal was created, and the report says so.
+  - **Previous-period comparisons** use the previous month, the previous year, or a range of the same length just before.
+  - **Budgets are monthly,** so the budget report compares whole months. Over a multi-month period, a category's total only includes months in which it had a budget. Spending in unbudgeted categories is shown separately.
+  - **Bills:** *paid* comes from the payment history in the period; *pending* means unpaid bills whose current due date falls in the period; *overdue* is as of today.
+  - **Recurring bill totals** are shown per cycle and per year. The monthly figure is labelled an average: the yearly total ÷ 12, with weekly bills counted 52 times a year.
+  - **Recurring expenses** are the expenses you marked as recurring, grouped by category, description and interval.
+- **CSV export** downloads the main table of the current report with the same filters:
+  - *What's in it:* each month for finance and savings, each expense, each budget per month, and each bill payment.
+  - *Format:* UTF-8 with a BOM, so Excel shows Nepali text correctly. Text that a spreadsheet could run as a formula (starting with `=`, `+`, `-` or `@`) is prefixed with `'`.
+  - *Privacy:* files are sent with `Cache-Control: private, no-store`.
 
 ## Calendar
 
@@ -495,6 +526,6 @@ username / email / password / notes         → vault_entries.*_enc  (version �
 | 7     | Secure password vault ✅                   |
 | 8     | Notes and documents ✅                     |
 | 9     | Calendar ✅                                |
-| 10    | Reports and analytics                      |
+| 10    | Reports and analytics ✅                   |
 | 11    | Notifications and automation               |
 | 12    | Settings, security audit and production    |

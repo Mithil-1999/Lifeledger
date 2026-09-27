@@ -119,6 +119,7 @@ function useInvalidateMoney() {
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["ledger"] }),
       queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      queryClient.invalidateQueries({ queryKey: ["reports"] }),
     ]);
 }
 
