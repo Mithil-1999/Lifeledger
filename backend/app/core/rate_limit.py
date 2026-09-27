@@ -66,7 +66,9 @@ def client_ip(request: Request) -> str:
     if get_settings().trust_proxy_headers:
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()[:45]
+            # Use the LAST address: it's the one our own reverse proxy appended. Earlier entries
+            # come from the client and can be forged to dodge per-IP rate limits.
+            return forwarded.split(",")[-1].strip()[:45]
     return (request.client.host if request.client else "unknown")[:45]
 
 

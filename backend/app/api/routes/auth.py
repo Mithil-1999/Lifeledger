@@ -1,5 +1,7 @@
 from typing import Annotated
 
+from sqlalchemy import or_, select
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 
 from app.api.deps import CurrentSession, CurrentUser, DbSession, get_optional_session
@@ -7,7 +9,7 @@ from app.core import rate_limit
 from app.core.config import get_settings
 from app.core.csrf import CSRF_HEADER
 from app.core.security import PASSWORD_MIN_LENGTH, generate_token
-from app.models import UserSession
+from app.models import SecurityEvent, User, UserSession
 from app.schemas.auth import (
     AuthConfigResponse,
     ChangePasswordRequest,
@@ -19,6 +21,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     UserPublic,
 )
+from app.services import account as account_service
 from app.services import auth as auth_service
 from app.services.email import send_email
 
@@ -62,6 +65,12 @@ def _set_csrf_cookie(response: Response, token: str) -> None:
         secure=settings.cookie_secure,
         samesite="lax",
         path="/",
+    )
+
+
+def _record(db, request: Request, user_id, event: SecurityEvent, detail: str | None = None) -> None:
+    account_service.record(
+        db, user_id, event, ip=rate_limit.client_ip(request), user_agent=request.headers.get("user-agent"), detail=detail
     )
 
 
@@ -129,18 +138,25 @@ def login(payload: LoginRequest, request: Request, response: Response, db: DbSes
 
     user = auth_service.authenticate(db, identifier=payload.identifier, password=payload.password.get_secret_value())
     if user is None:
+        # Log failed attempts against a real account in its security activity (the response is identical).
+        normalized = payload.identifier.strip().lower()
+        known = db.scalar(select(User.id).where(or_(User.email == normalized, User.username == normalized)))
+        if known is not None:
+            _record(db, request, known, SecurityEvent.LOGIN_FAILED)
         # Same message whether the account is unknown, disabled, or the password is wrong.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=INVALID_CREDENTIALS)
     _start_session(request, response, db, user, remember_me=payload.remember_me)
+    _record(db, request, user.id, SecurityEvent.LOGIN_SUCCEEDED)
     return UserPublic.model_validate(user)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
-    response: Response, db: DbSession, session: Annotated[UserSession | None, Depends(get_optional_session)]
+    request: Request, response: Response, db: DbSession, session: Annotated[UserSession | None, Depends(get_optional_session)]
 ) -> Response:
     if session is not None:
         auth_service.revoke_session(db, session)
+        _record(db, request, session.user_id, SecurityEvent.LOGOUT)
     _clear_session_cookie(response)
     _set_csrf_cookie(response, generate_token())
     response.status_code = status.HTTP_204_NO_CONTENT
@@ -166,9 +182,10 @@ def forgot_password(
 def reset_password(payload: ResetPasswordRequest, request: Request, db: DbSession) -> Response:
     rate_limit.enforce("reset:ip", rate_limit.client_ip(request), rate_limit.RESET_PER_IP)
     try:
-        auth_service.reset_password(db, token=payload.token, new_password=payload.new_password.get_secret_value())
+        user_id = auth_service.reset_password(db, token=payload.token, new_password=payload.new_password.get_secret_value())
     except auth_service.AuthError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from None
+    _record(db, request, user_id, SecurityEvent.PASSWORD_RESET)
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     _clear_session_cookie(response)
     return response
@@ -185,7 +202,7 @@ def me(user: CurrentUser, response: Response) -> UserPublic:
 
 @router.post("/change-password", response_model=MessageResponse)
 def change_password(
-    payload: ChangePasswordRequest, response: Response, user: CurrentUser, session: CurrentSession, db: DbSession
+    payload: ChangePasswordRequest, request: Request, response: Response, user: CurrentUser, session: CurrentSession, db: DbSession
 ) -> MessageResponse:
     rate_limit.enforce("change-password:user", str(user.id), rate_limit.CHANGE_PASSWORD_PER_USER)
     try:
@@ -203,4 +220,5 @@ def change_password(
         response, token, int((session.expires_at - auth_service.utcnow()).total_seconds()) if remember else None
     )
     _set_csrf_cookie(response, generate_token())
+    _record(db, request, user.id, SecurityEvent.PASSWORD_CHANGED)
     return MessageResponse(message="Password changed. Other devices have been signed out.")

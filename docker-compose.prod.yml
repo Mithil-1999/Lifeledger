@@ -1,0 +1,77 @@
+# LifeVault production stack.
+#
+#   cp .env.example .env    # then set the production values (see DEPLOYMENT.md)
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Put a TLS-terminating reverse proxy (Caddy, Traefik, nginx) in front of the `web`
+# service. It is published on 127.0.0.1 only, so nothing is exposed until you do.
+name: lifevault-prod
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No published port: only the backend can reach the database.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Applies database migrations once, then exits. The API only starts after it succeeds.
+  migrate:
+    build:
+      context: ./backend
+      target: prod
+    image: lifevault-api:latest
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    image: lifevault-api:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      DOCUMENT_STORAGE_DIR: /app/var/documents
+      # nginx in the `web` container sets X-Forwarded-For to the real client address.
+      TRUST_PROXY_HEADERS: "true"
+    volumes:
+      - documents:/app/var/documents
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-8080}:8080"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  # Uploaded documents and profile pictures. Back this up together with the database.
+  documents:

@@ -173,6 +173,8 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/notes": (init) => ({ status: 200, body: { ...emptyNoteList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "active" } }),
     "GET /api/notes/tags": { status: 200, body: [] },
     "GET /api/documents": { status: 200, body: emptyDocuments },
+    // Loaded by the app layout on every signed-in page (date format preference).
+    "GET /api/account/preferences": { status: 200, body: { currency: "NPR", date_format: "default", timezone: "Asia/Kathmandu", supported_currencies: ["NPR"] } },
     // The notification bell in the top bar loads these on every signed-in page.
     "GET /api/notifications": { status: 200, body: { items: [], total: 0, unread_count: 0 } },
     "POST /api/notifications/check": { status: 200, body: { created: 0, unread_count: 0 } },

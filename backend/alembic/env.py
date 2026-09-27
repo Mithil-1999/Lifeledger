@@ -10,7 +10,8 @@ from app.db.base import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep the application's own loggers enabled (the default would silence every existing logger).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Single source of truth for the connection string: the app settings / DATABASE_URL env var.
 # Escape "%" because Alembic's config uses ConfigParser interpolation.

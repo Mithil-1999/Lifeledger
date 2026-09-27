@@ -120,7 +120,11 @@ class BillPayment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """One payment of a bill (one cycle). Optionally linked to the expense it created."""
 
     __tablename__ = "bill_payments"
-    __table_args__ = (CheckConstraint("amount > 0", name="amount_positive"),)
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="amount_positive"),
+        # Reports and "paid this month" filter payments by user and payment date.
+        Index("ix_bill_payments_user_id_paid_on", "user_id", "paid_on"),
+    )
 
     user_id: Mapped[uuid.UUID] = _user_fk()
     bill_id: Mapped[uuid.UUID] = mapped_column(

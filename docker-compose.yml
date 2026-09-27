@@ -1,4 +1,4 @@
-# LifeVault development environment.
+# LifeVault development environment (production: docker-compose.prod.yml, see DEPLOYMENT.md).
 # Usage: cp .env.example .env  (edit secrets)  &&  docker compose up --build
 name: lifevault
 
@@ -22,7 +22,9 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: dev
     restart: unless-stopped
     env_file: .env
     environment:

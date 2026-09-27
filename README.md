@@ -2,7 +2,17 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phases 1–11 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log), a **personal calendar** that shows your events alongside tasks, reminders, bills and savings deadlines, **financial reports** (monthly finance, expenses, budget, savings and bills) with charts and CSV export, and **notifications** (a notification center, preferences, browser notifications, and a background job for the recurring checks). The remaining modules are built in the later phases listed below.
+> **Status: all 12 phases complete.** You get:
+> - secure accounts and a personal dashboard
+> - income, expenses, budgets, bills and savings
+> - tasks, reminders and a calendar
+> - notes and private document storage
+> - an **encrypted password vault**
+> - **financial reports** with CSV export
+> - **notifications**
+> - **settings**: profile and picture, sessions, security activity, preferences, data export and account deletion
+>
+> It's ready to deploy with Docker: see **[DEPLOYMENT.md](DEPLOYMENT.md)**. For the security review and its limitations, see **[SECURITY.md](SECURITY.md)**.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -30,7 +40,8 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
 │   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
 │   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders),
-│   │   │                        records (notes/documents), vault, calendar, reports, notifications
+│   │   │                        records (notes/documents), vault, calendar, reports, notifications,
+│   │   │                        account (settings, sessions, export, deletion)
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
@@ -38,20 +49,22 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │                        planning.py (budgets, bills, bill payments, savings goals),
 │   │   │                        productivity.py (tasks, reminders), records.py (notes, documents),
 │   │   │                        vault.py (vault keys, entries, audit log), calendar.py (events)
-│   │   │                        notifications.py (notifications, preferences, job runs)
+│   │   │                        notifications.py (notifications, preferences, job runs),
+│   │   │                        account.py (security activity, user preferences)
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
 │   │   │                        budgets, bills, savings, tasks, reminders, notes, documents,
-│   │   │                        vault, calendar, reports, notifications
+│   │   │                        vault, calendar, reports, notifications, account
 │   │   ├── jobs/                Background jobs: notification checks (scheduler + CLI)
 │   │   └── main.py              App factory: CORS, middleware, routers, scheduler lifespan
 │   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
 │   │                            → 0004 budgets/bills/savings → 0005 tasks/reminders
 │   │                            → 0006 notes/documents → 0007 password vault
 │   │                            → 0008 calendar events → 0009 notifications
+│   │                            → 0010 account settings / security activity
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
-│   ├── Dockerfile
+│   ├── Dockerfile               `dev` and `prod` targets (prod: no dev tools, non-root)
 │   ├── requirements.txt
 │   └── requirements-dev.txt
 ├── frontend/                    React + Vite SPA
@@ -74,13 +87,20 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── features/calendar/   Calendar API, date maths, month/week/day/agenda views, event form
 │   │   ├── features/reports/    Report API, filters, report sections (figures, charts, tables)
 │   │   ├── features/notifications/ Notification API, bell, browser notifications
+│   │   ├── features/account/    Settings API, avatar, device/activity helpers
 │   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
 │   │   ├── pages/               One page per module; pages/auth/ for sign-in flows
 │   │   └── test/                Vitest tests
+│   ├── Dockerfile               Build → nginx (production)
+│   ├── nginx.conf               SPA + /api proxy, CSP, caching, query-less access logs
 │   └── vite.config.ts
 ├── docker-compose.yml           PostgreSQL + backend + frontend (development)
+├── docker-compose.prod.yml      Production: db, migrate, backend, web (nginx)
+├── scripts/                     backup.sh / restore.sh (database + documents)
+├── DEPLOYMENT.md                Production deployment, migrations, backups, upgrades
+├── SECURITY.md                  Security review, 2FA design, known limitations
 ├── .env.example                 Environment template (copy to .env)
 └── README.md
 ```
@@ -374,6 +394,51 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - *Reminders:* due and upcoming reminders.
   - *Quick actions:* all five open the real “add” forms.
 
+## Settings & account
+
+**Settings** has four tabs.
+
+- **Profile:** your name, username and email. Changing the username or email needs your current password, and duplicates are refused. You can also upload a profile picture (PNG, JPEG or WebP, up to 2 MB, checked by its bytes and shown only to you).
+- **Security:**
+  - Change your password.
+  - See your **active sessions** (device, IP, last active) and sign out one of them or all the others.
+  - See your **security activity**: sign-ins, failed sign-ins, sign-outs, password changes and resets, profile changes, exports.
+  - See the **2FA status**. Two-factor authentication is designed but not built yet (see SECURITY.md), and the page says so.
+- **Preferences:**
+  - *Currency:* NPR, the only supported currency.
+  - *Date format:* `Thu, 24 Sep 2026`, `24/09/2026`, `09/24/2026` or `2026-09-24`. It applies to full dates across the app.
+  - *Timezone:* shown read-only. It's set server-wide with `APP_TIMEZONE`.
+  - *Theme:* chosen per device.
+  - A link to the notification settings.
+- **Data:**
+  - **Export** financial data, personal data or everything as JSON. You need to re-enter your password, exports are limited to 5 an hour, and each one is logged. Vault secrets and uploaded files are never included.
+  - **Backup information:** record counts, storage used, last export, and the app and database schema versions.
+  - **Delete account:** needs your password and the typed word `DELETE`. It removes every record and stored file.
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| PUT | `/api/account/profile` | `{name, username, email, current_password?}` |
+| POST / GET / DELETE | `/api/account/avatar` | Upload (multipart `file`), view, or remove your profile picture |
+| GET | `/api/account/sessions` | Active sessions (`current` marks this device) |
+| DELETE | `/api/account/sessions/{id}` · POST `/api/account/sessions/revoke-others` | Sign out one session · all other sessions |
+| GET | `/api/account/security-activity?limit=` | Security activity, newest first |
+| GET | `/api/account/two-factor` | 2FA status (not available yet) |
+| GET / PUT | `/api/account/preferences` | `{currency, date_format}`, plus read-only `timezone` and `supported_currencies` |
+| POST | `/api/account/export` | `{scope: all\|personal\|financial, password}` returns a JSON download |
+| GET | `/api/account/backup-info` | Counts, storage, last export, versions |
+| DELETE | `/api/account` | `{password, confirmation: "DELETE"}` |
+
+## Production
+
+- **Deploy:** `docker compose -f docker-compose.prod.yml up -d --build`. This runs PostgreSQL (no published port), a one-off **migrate** container, the API (non-root, read-only filesystem, one worker), and **nginx** serving the built app and proxying `/api` on `127.0.0.1:8080`. Put a TLS reverse proxy in front.
+- **Guides:** step by step, including secrets, HTTPS, first account, migrations, **backups and restores** (`scripts/backup.sh`, `scripts/restore.sh`), upgrades and troubleshooting, in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+- **Performance work in Phase 12:**
+  - The finance report now builds its running balance from one opening query plus the monthly totals, instead of 2 queries per month.
+  - Added an index on `bill_payments (user_id, paid_on)`.
+  - Income/expense lists and notifications are paginated, and charts are lazy-loaded.
+  - Notes and documents load their whole list. That's fine for one person's records (hundreds of items), but server-side pagination would be the next step for thousands.
+  - The notification poll only runs while the tab is visible.
+
 ## Notifications & automation
 
 - **What you're notified about:**
@@ -560,7 +625,8 @@ username / email / password / notes         → vault_entries.*_enc  (version �
 - All database access goes through SQLAlchemy with bound parameters. There's no string-built SQL.
 
 - Unhandled errors return a generic `500` to the client. Details stay in the server log, and request bodies are never logged.
-- Authentication, CSRF protection and rate limiting are covered above. Vault encryption and upload hardening come in their own phases. This is a personal project, and no application is perfectly secure.
+- Authentication, CSRF protection and rate limiting are covered above. Vault encryption and upload hardening are covered in their own sections.
+- **The Phase 12 security review, its fixes, and the limitations that remain are in [SECURITY.md](SECURITY.md).** This is a personal project, and no application is perfectly secure.
 
 ## Roadmap
 
@@ -577,4 +643,4 @@ username / email / password / notes         → vault_entries.*_enc  (version �
 | 9     | Calendar ✅                                |
 | 10    | Reports and analytics ✅                   |
 | 11    | Notifications and automation ✅            |
-| 12    | Settings, security audit and production    |
+| 12    | Settings, security audit and production ✅ |

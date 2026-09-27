@@ -1,5 +1,6 @@
 """Authentication business logic: accounts, sessions and password resets."""
 
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -221,7 +222,7 @@ def create_password_reset(db: Session, *, email: str, requested_ip: str | None) 
     return OutgoingEmail(to=user.email, subject="Reset your LifeVault password", body=body)
 
 
-def reset_password(db: Session, *, token: str, new_password: str) -> None:
+def reset_password(db: Session, *, token: str, new_password: str) -> uuid.UUID:
     record = db.scalar(select(PasswordResetToken).where(PasswordResetToken.token_hash == hash_token(token)))
     now = utcnow()
     if record is None or record.used_at is not None or now >= record.expires_at:
@@ -237,3 +238,4 @@ def reset_password(db: Session, *, token: str, new_password: str) -> None:
     # A reset means the old password may be compromised: sign out everywhere.
     revoke_all_sessions(db, user_id=user.id, commit=False)
     db.commit()
+    return user.id

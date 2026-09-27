@@ -8,6 +8,8 @@ export interface User {
   status: string;
   created_at: string;
   last_login_at: string | null;
+  has_avatar?: boolean;
+  avatar_updated_at?: string | null;
 }
 
 export interface AuthConfig {

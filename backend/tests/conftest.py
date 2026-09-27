@@ -101,6 +101,7 @@ def _clean_state():
             # Not TRUNCATE ... CASCADE: that would also wipe the seeded built-in categories
             # (categories references users). Row deletes cascade only to user-owned rows.
             conn.execute(text("DELETE FROM job_runs"))
+            conn.execute(text("DELETE FROM bill_payments"))
             conn.execute(text("DELETE FROM calendar_events"))
             conn.execute(text("DELETE FROM vault_audit_log"))
             conn.execute(text("DELETE FROM vault_entries"))

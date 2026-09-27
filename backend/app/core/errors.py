@@ -1,6 +1,7 @@
 """Exception handlers that never leak internals or echo submitted values (e.g. passwords)."""
 
 import logging
+import traceback
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -29,7 +30,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
-        # The traceback is logged server-side (it contains no local variable values);
-        # the client only ever sees a generic message.
-        logger.error("Unhandled %s on %s %s", type(exc).__name__, request.method, request.url.path, exc_info=exc)
+        # Log where it happened, but NOT the exception message: database errors embed the SQL
+        # parameters (note text, amounts, ciphertext...) in their message. The client only ever
+        # sees a generic message.
+        frames = "".join(traceback.format_tb(exc.__traceback__))
+        logger.error("Unhandled %s on %s %s\n%s", type(exc).__name__, request.method, request.url.path, frames)
         return JSONResponse(status_code=500, content={"detail": "Internal server error."})

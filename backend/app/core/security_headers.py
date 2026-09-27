@@ -4,6 +4,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.config import get_settings
+
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -26,4 +28,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             if is_docs and name == "Content-Security-Policy":
                 continue
             response.headers.setdefault(name, value)
+        # HSTS only makes sense (and is only honoured) over HTTPS, which COOKIE_SECURE=true implies.
+        if get_settings().cookie_secure:
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return response

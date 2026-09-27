@@ -2,6 +2,8 @@ import * as React from "react";
 import { Outlet, useLocation } from "react-router";
 import { pageTitle } from "@/config/navigation";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAccountPreferences } from "@/features/account/api";
+import { setDateFormatPreference } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "./bottom-nav";
 import { MobileDrawer } from "./mobile-drawer";
@@ -23,6 +25,9 @@ export function AppLayout() {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const { pathname } = useLocation();
   const title = pageTitle(pathname);
+  const { data: preferences } = useAccountPreferences();
+  // A plain module setting read by formatDate; this layout re-renders the pages when it changes.
+  setDateFormatPreference(preferences?.date_format ?? "default");
 
   const toggleCollapsed = () =>
     setCollapsed((value) => {

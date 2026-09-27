@@ -36,10 +36,18 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Profile picture: a random, server-generated file name under DOCUMENT_STORAGE_DIR/avatars/<user id>/.
+    avatar_key: Mapped[str | None] = mapped_column(String(64))
+    avatar_content_type: Mapped[str | None] = mapped_column(String(20))
+    avatar_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True
     )
+
+    @property
+    def has_avatar(self) -> bool:
+        return self.avatar_key is not None
 
     @property
     def is_active(self) -> bool:

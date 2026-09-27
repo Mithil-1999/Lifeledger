@@ -101,6 +101,31 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   return data as T;
 }
 
+/** POST/GET that returns a file (e.g. a data export): resolves to the blob and its suggested filename. */
+export async function apiDownload(path: string, options: ApiRequestOptions = {}): Promise<{ blob: Blob; filename: string }> {
+  const response = await send(path, options, true);
+  if (!response.ok) {
+    const data: unknown = await response.json().catch(() => null);
+    if (response.status === 401 && !options.skipAuthRedirect) window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    throw new ApiError(response.status, data, errorMessageFromBody(response.status, data));
+  }
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? "lifevault-download";
+  return { blob: await response.blob(), filename };
+}
+
+/** Save a blob as a file via a temporary object URL. */
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 interface ValidationErrorItem {
   loc?: (string | number)[];
   msg?: string;

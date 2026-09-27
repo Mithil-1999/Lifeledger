@@ -116,6 +116,8 @@ class UserPublic(BaseModel):
     status: str
     created_at: datetime
     last_login_at: datetime | None
+    has_avatar: bool = False
+    avatar_updated_at: datetime | None = None
 
 
 class CsrfResponse(BaseModel):

@@ -199,12 +199,22 @@ def finance_report(db: Session, user_id: uuid.UUID, period: ReportPeriod, today:
     expense_by_month = _monthly(db, Expense, user_id, period.trend_start, period.end)
     savings_by_month = _contributions_by_month(db, user_id, period.trend_start, period.end)
 
+    # Running balance: one opening query, then the monthly totals already loaded. Only the month
+    # containing today needs its own query (entries dated after today must not count).
+    running = balance_as_of(db, user_id, period.trend_start - timedelta(days=1)) if period.trend_start <= today else ZERO
     rows = []
     for month in period.trend_months:
         income = income_by_month.get(month, ZERO)
         expenses = expense_by_month.get(month, ZERO)
         deposits, withdrawals = savings_by_month.get(month, (ZERO, ZERO))
         start, end = clip(month, period.trend_start, period.end)
+        if start > today:
+            balance = None  # the month hasn't started yet
+        elif end <= today:
+            running += income - expenses
+            balance = running
+        else:
+            balance = balance_as_of(db, user_id, today)
         rows.append(
             {
                 "month": month,
@@ -212,8 +222,7 @@ def finance_report(db: Session, user_id: uuid.UUID, period: ReportPeriod, today:
                 "expenses": expenses,
                 "net": income - expenses,
                 "savings": deposits - withdrawals,
-                # Closing balance for the month; None for months that haven't started yet.
-                "balance": balance_as_of(db, user_id, min(end, today)) if start <= today else None,
+                "balance": balance,
             }
         )
 

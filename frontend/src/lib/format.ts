@@ -37,9 +37,24 @@ export function formatAmount(amount: string | number, currency: string, options:
   return formatMoney({ amount: String(amount), currency }, options);
 }
 
+export type DateFormatPreference = "default" | "dmy" | "mdy" | "iso";
+
+let dateFormatPreference: DateFormatPreference = "default";
+
+/** Set from the user's settings (Settings → Preferences). Applies to full dates (day, month and year). */
+export function setDateFormatPreference(value: DateFormatPreference) {
+  dateFormatPreference = value;
+}
+
 /** "2026-09-24" -> "Thu, 24 Sep 2026" (date-only strings are treated as calendar dates, not UTC instants). */
 export function formatDate(isoDate: string, options: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", year: "numeric" }) {
   const [year, month, day] = isoDate.split("-").map(Number);
+  if (dateFormatPreference !== "default" && options.year && options.month && options.day) {
+    const dd = String(day).padStart(2, "0");
+    const mm = String(month).padStart(2, "0");
+    if (dateFormatPreference === "iso") return `${year}-${mm}-${dd}`;
+    return dateFormatPreference === "dmy" ? `${dd}/${mm}/${year}` : `${mm}/${dd}/${year}`;
+  }
   return new Intl.DateTimeFormat("en-GB", { ...options, timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
