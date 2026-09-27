@@ -159,6 +159,10 @@ export function mockApi({ user = testUser, health = { status: 200, body: healthy
     "GET /api/notes": (init) => ({ status: 200, body: { ...emptyNoteList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "active" } }),
     "GET /api/notes/tags": { status: 200, body: [] },
     "GET /api/documents": { status: 200, body: emptyDocuments },
+    "GET /api/calendar": (init) => {
+      const params = new URL(init.url, "http://x").searchParams;
+      return { status: 200, body: { start: params.get("start"), end: params.get("end"), today: "2026-09-24", items: [], counts: {} } };
+    },
     "GET /api/reminders": (init) => ({ status: 200, body: { ...emptyReminderList, view: new URL(init.url, "http://x").searchParams.get("view") ?? "all" } }),
     ...routes,
   };

@@ -4,6 +4,7 @@ Import every model module here so `Base.metadata` is fully populated for Alembic
 """
 
 from app.db.base import Base
+from app.models.calendar import EVENT_REMINDER_MINUTES, CalendarEvent, EventCategory, EventRecurrence, EventType
 from app.models.finance import Category, CategoryKind, Expense, Income, PaymentMethod, RecurrenceInterval
 from app.models.planning import (
     BILL_EXPENSE_CATEGORY,
@@ -33,6 +34,11 @@ from app.models.user import PasswordResetToken, User, UserSession, UserStatus
 from app.models.vault import VaultAction, VaultAuditLog, VaultCategory, VaultEntry, VaultKey
 
 __all__ = [
+    "EVENT_REMINDER_MINUTES",
+    "CalendarEvent",
+    "EventCategory",
+    "EventRecurrence",
+    "EventType",
     "VaultAction",
     "VaultAuditLog",
     "VaultCategory",

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user
-from app.api.routes import auth, dashboard, finance, health, planning, productivity, records, vault
+from app.api.routes import auth, calendar, dashboard, finance, health, planning, productivity, records, vault
 
 api_router = APIRouter(prefix="/api")
 
@@ -18,5 +18,6 @@ protected_router.include_router(planning.router)
 protected_router.include_router(productivity.router)
 protected_router.include_router(records.router)
 protected_router.include_router(vault.router)
+protected_router.include_router(calendar.router)
 
 api_router.include_router(protected_router)

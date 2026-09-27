@@ -2,7 +2,7 @@
 
 A private, self-hosted personal life-management web app. It covers income, expenses, bills, rent, budgets, savings, debts, tasks, reminders, a calendar, notes, documents and an encrypted password vault, all in one dashboard.
 
-> **Status: Phases 1–8 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, and an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log). The remaining modules are built in the later phases listed below.
+> **Status: Phases 1–9 complete.** You get secure accounts, a personal dashboard, income and expenses, budgets, bills, savings, tasks and reminders, notes, private document storage, an **encrypted password vault** (AES-256-GCM envelope encryption, a password re-check to unlock, and an audit log), and a **personal calendar** that shows your events alongside tasks, reminders, bills and savings deadlines. The remaining modules are built in the later phases listed below.
 
 Default currency is **NPR (Nepalese Rupee)**. The architecture leaves room for more currencies later.
 
@@ -30,21 +30,23 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   │   ├── deps.py          DB session + CurrentUser/CurrentSession guards
 │   │   │   └── routes/          health, auth, dashboard, finance (categories/income/expenses),
 │   │   │                        planning (budgets/bills/savings), productivity (tasks/reminders),
-│   │   │                        records (notes/documents), vault
+│   │   │                        records (notes/documents), vault, calendar
 │   │   ├── core/                Settings, security (Argon2, tokens, password policy),
 │   │   │                        CSRF, rate limiting, security headers, error handlers
 │   │   ├── db/                  Declarative Base + mixins, engine/session
 │   │   ├── models/              user.py, finance.py (categories, incomes, expenses),
 │   │   │                        planning.py (budgets, bills, bill payments, savings goals),
 │   │   │                        productivity.py (tasks, reminders), records.py (notes, documents),
-│   │   │                        vault.py (vault keys, entries, audit log)
+│   │   │                        vault.py (vault keys, entries, audit log), calendar.py (events)
 │   │   ├── schemas/             Pydantic request/response models
 │   │   ├── services/            Business logic: auth, email, dashboard, ledger, categories,
-│   │   │                        budgets, bills, savings
+│   │   │                        budgets, bills, savings, tasks, reminders, notes, documents,
+│   │   │                        vault, calendar
 │   │   └── main.py              App factory: CORS, middleware, routers
 │   ├── alembic/                 Migrations 0001 baseline → 0002 auth → 0003 income/expenses
 │   │                            → 0004 budgets/bills/savings → 0005 tasks/reminders
 │   │                            → 0006 notes/documents → 0007 password vault
+│   │                            → 0008 calendar events
 │   ├── tests/                   pytest suite
 │   ├── alembic.ini
 │   ├── Dockerfile
@@ -67,6 +69,7 @@ Recharts is loaded lazily in its own bundle chunk, so pages without charts (like
 │   │   ├── features/productivity/ Tasks and reminders API + constants
 │   │   ├── features/records/    Notes and documents API + constants
 │   │   ├── features/vault/      Vault API, secret field (reveal/copy/auto-hide), password generator
+│   │   ├── features/calendar/   Calendar API, date maths, month/week/day/agenda views, event form
 │   │   ├── components/charts/   Reusable Recharts components (lazy-loaded)
 │   │   ├── features/system/     API health hook, status card, status indicator
 │   │   ├── lib/                 API client (CSRF, 401 handling), query client, utils
@@ -272,6 +275,14 @@ If PostgreSQL is unreachable, the endpoint returns **HTTP 503** with `"database"
 | GET    | `/api/vault/audit?limit=`   | ✔🔓 | Recent vault activity (never includes secrets) |
 
 🔓 = the vault must be unlocked for this session; otherwise the API returns `423 Locked`.
+
+Calendar:
+
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| GET    | `/api/calendar?start=&end=&search=&sources=&category=` | ✔ | Everything between two dates (inclusive, at most 366 days). `sources` is a comma list of `event,task,reminder,bill,goal` (default: all); `category` filters events |
+| POST   | `/api/calendar/events`      | ✔ | Create `{title, start_date, end_date?, start_time?, end_time?, event_type, category, recurrence?, reminder_minutes?, location?, description?}` (no start time = all day) |
+| GET / PUT / DELETE | `/api/calendar/events/{id}` | ✔ | Read, replace, or delete an event (deleting also deletes its reminder) |
 | POST   | `/api/auth/change-password` | ✔    | Change password, sign out other devices |
 
 Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors return `422 {"detail", "errors": [{loc, msg, type}]}` and never echo the submitted values back.
@@ -334,6 +345,25 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
   - *Tasks:* Today, Not started (excluding overdue) and Overdue, with full counts.
   - *Reminders:* due and upcoming reminders.
   - *Quick actions:* all five open the real “add” forms.
+
+## Calendar
+
+- **One calendar, no copies.** Only your own events are stored by the calendar (`calendar_events`). Tasks, reminders, bills and savings-goal deadlines are **read live from their own tables** each time the calendar loads, so editing a task or paying a bill shows up immediately, and nothing can drift out of sync.
+- **What it shows:**
+  - *Events:* appointments, personal events and deadlines, each with a category (Personal, Work, Health, Family, Finance, Education, Social, Travel, Other), an optional location and notes.
+  - *Tasks:* by due date and time. Overdue and completed tasks are marked; cancelled tasks are hidden.
+  - *Reminders:* at their next time, marked *due* when it has passed.
+  - *Bills:* on their due date, with the amount. Paid cycles come from the payment history, and overdue bills are marked.
+  - *Savings goals:* their target date, as a deadline.
+- **Views:** Month, Week, Day and Agenda (the next 30 days), with previous/next/today navigation. The view and date are kept in the URL, so reloading or sharing a link keeps your place.
+- **Search and filters:** search titles, notes, places and categories; show or hide each type (Events, Tasks, Reminders, Bills, Goal deadlines); filter events by category.
+- **Events:**
+  - *All-day or timed:* an event with no start time is all-day. Events can span several days, and a timed event can run past midnight.
+  - *Repeats:* daily, weekly, monthly or yearly. Future repeats are **computed for the range you're viewing, never stored**. A monthly event on the 31st returns to the 31st after shorter months, and a 29 February yearly event falls on 28 February in other years. Editing or deleting applies to the whole series.
+  - *Reminders:* “remind me” (at the start, or 5 minutes to 1 week before; all-day events count from 09:00) creates a normal reminder that appears in **Reminders** and on the dashboard. On the calendar it's shown on the event, not as a second item. It moves when the event moves and is deleted with the event. An event that has already started gets no reminder.
+- **Recurring bills and reminders** show their upcoming repeats too, marked as upcoming. Reminder repeats that have already passed aren't shown, because completing a late reminder skips them.
+- **Times** are wall-clock times in `APP_TIMEZONE`, the same as task due dates.
+- **Phones:** the month grid shows coloured dots, and the selected day's items are listed below it. The week view stacks the days, and nothing scrolls sideways.
 
 ## Notes & documents
 
@@ -464,7 +494,7 @@ username / email / password / notes         → vault_entries.*_enc  (version �
 | 6     | Tasks and reminders ✅                     |
 | 7     | Secure password vault ✅                   |
 | 8     | Notes and documents ✅                     |
-| 9     | Calendar                                   |
+| 9     | Calendar ✅                                |
 | 10    | Reports and analytics                      |
 | 11    | Notifications and automation               |
 | 12    | Settings, security audit and production    |

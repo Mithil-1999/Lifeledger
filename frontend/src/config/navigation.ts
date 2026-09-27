@@ -20,7 +20,7 @@ import {
 
 /** Build phases that are finished. Phases can land out of order (8 was built before 7),
  * so "live" is an explicit set rather than "phase <= N". */
-export const COMPLETED_PHASES: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
+export const COMPLETED_PHASES: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
 export function isLive(item: { phase: number | null }) {
   return item.phase !== null && COMPLETED_PHASES.has(item.phase);
@@ -141,9 +141,9 @@ export const NAV_GROUPS: NavGroup[] = [
         title: "Calendar",
         path: "/calendar",
         icon: CalendarDays,
-        description: "Reminders, bills and tasks on a calendar.",
+        description: "Events, tasks, reminders and bills in one calendar.",
         phase: 9,
-        planned: ["Month and week views", "Bills, tasks and reminders together"],
+        planned: ["Month, week, day and agenda views", "Bills, tasks and reminders together"],
       },
     ],
   },

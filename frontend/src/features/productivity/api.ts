@@ -77,7 +77,7 @@ export const useTaskCategories = () =>
 
 function useInvalidate(key: string) {
   const queryClient = useQueryClient();
-  return () => Promise.all([queryClient.invalidateQueries({ queryKey: [key] }), queryClient.invalidateQueries({ queryKey: ["dashboard"] })]);
+  return () => Promise.all([key, "dashboard", "calendar"].map((k) => queryClient.invalidateQueries({ queryKey: [k] })));
 }
 
 export function useTaskMutations() {
