@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     # Read notifications older than this are deleted by the job (unread ones are kept).
     notification_retention_days: int = Field(default=90, ge=7, le=3650)
 
+    # --- Single-container hosting (e.g. Render) ---------------------------------------
+    # Folder with the built web app (frontend/dist). When set, the API also serves the website,
+    # so one container hosts everything. Leave unset when nginx serves the frontend.
+    static_dir: Path | None = None
+
     # --- Rate limiting ----------------------------------------------------------------
     rate_limit_enabled: bool = True
     # Only enable behind a trusted reverse proxy that sets X-Forwarded-For.

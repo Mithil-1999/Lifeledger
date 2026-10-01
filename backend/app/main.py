@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.csrf import CSRFMiddleware
 from app.core.errors import register_exception_handlers
 from app.core.security_headers import SecurityHeadersMiddleware
+from app.core.static_site import mount_static_site
 from app.core.upload_limit import UploadSizeLimitMiddleware
 from app.jobs.notifications import start_scheduler
 
@@ -59,6 +60,9 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(api_router)
+    # One-container hosting: the API also serves the built web app (registered last, so /api wins).
+    if settings.static_dir is not None and (settings.static_dir / "index.html").is_file():
+        mount_static_site(app, settings.static_dir)
     return app
 
 
