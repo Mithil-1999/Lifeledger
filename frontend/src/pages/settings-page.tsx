@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { AlertCircle, ChevronRight, Download, KeyRound, Laptop, Loader2, LogOut, ShieldAlert, ShieldCheck, Trash2, Upload, UserRound } from "lucide-react";
+import { AlertCircle, ChevronRight, Download, Smartphone, KeyRound, Laptop, Loader2, LogOut, ShieldAlert, ShieldCheck, Trash2, Upload, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { PageHeader } from "@/components/common/page-header";
@@ -32,6 +32,7 @@ import { SECURITY_EVENT_LABELS, dateTime, describeDevice, formatBytes } from "@/
 import { useCurrentUser } from "@/features/auth/use-auth";
 import type { User } from "@/features/auth/api";
 import { getErrorMessage, getFieldError } from "@/lib/api";
+import { promptInstall, useInstallState } from "@/lib/pwa";
 import { cn } from "@/lib/utils";
 
 type SettingsTab = "profile" | "security" | "preferences" | "data";
@@ -344,6 +345,50 @@ function PreferencesTab() {
   );
 }
 
+function InstallAppCard() {
+  const state = useInstallState();
+  const install = async () => {
+    if (await promptInstall()) toast.success("LifeVault is being installed.");
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Smartphone className="size-4" aria-hidden /> Install the app
+        </CardTitle>
+        <CardDescription>Add LifeVault to your phone or computer so it opens like a normal app, with its own icon and full screen.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 text-sm">
+        {state.kind === "installed" ? (
+          <p className="flex items-center gap-2 font-medium text-success">
+            <ShieldCheck className="size-4" aria-hidden /> LifeVault is installed on this device.
+          </p>
+        ) : state.kind === "available" ? (
+          <div>
+            <Button onClick={() => void install()}>
+              <Download aria-hidden /> Install LifeVault
+            </Button>
+          </div>
+        ) : state.kind === "ios" ? (
+          <ol className="grid list-decimal gap-1 pl-5">
+            <li>Open LifeVault in <strong>Safari</strong>.</li>
+            <li>Tap the <strong>Share</strong> button (the square with an arrow).</li>
+            <li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
+          </ol>
+        ) : (
+          <ol className="grid list-decimal gap-1 pl-5">
+            <li>On Android, open LifeVault in <strong>Chrome</strong>. On a computer, use Chrome or Edge.</li>
+            <li>Open the browser menu (⋮) and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>
+          </ol>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Installing needs the secure (https://) online version of LifeVault. Your data is never stored for offline use; the app always loads it fresh from your server.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 // --- Data --------------------------------------------------------------------------------------------------------------------
 
 const COUNT_LABELS: Record<string, string> = {
@@ -561,7 +606,10 @@ export function SettingsPage() {
         ) : tab === "security" ? (
           <SecurityTab />
         ) : tab === "preferences" ? (
-          <PreferencesTab />
+          <div className="grid gap-4">
+            <PreferencesTab />
+            <InstallAppCard />
+          </div>
         ) : (
           <DataTab />
         )}

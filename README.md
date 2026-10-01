@@ -428,6 +428,18 @@ Every `POST` needs the `X-CSRF-Token` header (see below). Validation errors retu
 | GET | `/api/account/backup-info` | Counts, storage, last export, versions |
 | DELETE | `/api/account` | `{password, confirmation: "DELETE"}` |
 
+## Install on your phone (installable app)
+
+LifeVault is an installable web app (PWA). It has its own icon, opens full-screen and needs no app store.
+
+1. Deploy LifeVault online with HTTPS (see [DEPLOYMENT.md](DEPLOYMENT.md)). Installing doesn't work from `localhost` on another device.
+2. Open your LifeVault address on the phone.
+   - **Android (Chrome):** tap **Install app** in the ⋮ menu, or the button under **Settings → Preferences → Install the app**.
+   - **iPhone/iPad (Safari):** tap **Share**, then **Add to Home Screen**.
+3. The home-screen shortcuts are *Add expense*, *Tasks* and *Calendar* (long-press the icon on Android).
+
+**Privacy:** the service worker (`frontend/public/sw.js`) caches only the app shell (HTML, JS, CSS, icons). It **never intercepts or stores `/api/` responses**, so financial data, vault entries, notes and documents always come fresh from your server and are never left on the phone. Tests in `src/test/service-worker.test.ts` check this. Updates install automatically: pages load network-first, and `sw.js` is served with `no-cache`.
+
 ## Production
 
 - **Deploy:** `docker compose -f docker-compose.prod.yml up -d --build`. This runs PostgreSQL (no published port), a one-off **migrate** container, the API (non-root, read-only filesystem, one worker), and **nginx** serving the built app and proxying `/api` on `127.0.0.1:8080`. Put a TLS reverse proxy in front.

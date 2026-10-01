@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatDate, setDateFormatPreference } from "@/lib/format";
 import { describeDevice } from "@/features/account/helpers";
+import { _setDeferredPromptForTests } from "@/lib/pwa";
 import { mockApi, renderApp, sentBody, testUser } from "./utils";
 
 beforeEach(() => {
@@ -204,4 +205,35 @@ describe("settings: data", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(sentBody(fetchMock, "DELETE", "/api/account")).toEqual({ password: "Correct-Horse-42", confirmation: "DELETE" });
   }, 30_000);
+});
+
+describe("settings: install the app", () => {
+  afterEach(() => _setDeferredPromptForTests(null));
+
+  it("offers the browser's install dialog when available", async () => {
+    const prompt = vi.fn(async () => undefined);
+    _setDeferredPromptForTests(Object.assign(new Event("beforeinstallprompt"), { prompt, userChoice: Promise.resolve({ outcome: "accepted" as const }) }));
+    mockApi();
+    const user = userEvent.setup();
+    renderApp("/settings?tab=preferences");
+    await user.click(await screen.findByRole("button", { name: /Install LifeVault/ }));
+    expect(prompt).toHaveBeenCalled();
+    expect(await screen.findByText("LifeVault is installed on this device.")).toBeInTheDocument();
+  });
+
+  it("explains Add to Home Screen on iPhone", async () => {
+    const ua = vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1");
+    mockApi();
+    renderApp("/settings?tab=preferences");
+    expect(await screen.findByText(/Add to Home Screen/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Install LifeVault/ })).not.toBeInTheDocument();
+    ua.mockRestore();
+  });
+
+  it("shows the browser menu steps elsewhere and never caches data", async () => {
+    mockApi();
+    renderApp("/settings?tab=preferences");
+    expect(await screen.findByText(/Install app/)).toBeInTheDocument();
+    expect(screen.getByText(/Your data is never stored for offline use/)).toBeInTheDocument();
+  });
 });
